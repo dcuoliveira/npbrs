@@ -1,4 +1,4 @@
-name: nbrs
+name: npbrs
 channels:
   - defaults
   - conda-forge
