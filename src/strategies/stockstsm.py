@@ -1,24 +1,26 @@
+import sys
 import os
 import pandas as pd
 import numpy as np
 
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 from settings import INPUT_PATH, OUTPUT_PATH
-from src.signals.TSM import TSM
+from signals.TSM import TSM
 from portfolio_tools.Backtest import Backtest
-from src.utils.conn_data import load_pickle, save_pickle
+from utils.conn_data import load_pickle, save_pickle
 
 class stockstsm(TSM):
-    def __init__(self, simulation_start) -> None:
+    def __init__(self, simulation_start, vol_target, bar_names) -> None:
         self.sysname = "stockstsm"
         self.instruments = ["AA", "ABM", "ABT"]
         self.simulation_start = simulation_start
+        self.vol_target = vol_target
+        self.bar_names = bar_names
 
         # inputs
-        self.strat_inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, "{}.pickle".format(self.sysname)))
-        self.bars_info = self.strat_inputs["bars"]
-
+        self.bars_info = load_pickle(os.path.join(INPUT_PATH, "crsp_nyse.pickle"))
         self.signals_info = self.build_signals()
-        
         self.forecasts_info = self.build_forecasts()
 
         # outputs
@@ -30,25 +32,29 @@ class stockstsm(TSM):
     def build_signals(self):
         signals_info = {}
         for inst in self.instruments:
-            tmp_signals = self.forecasts_info[inst].resample("B").last().ffill()
-            signals_info[inst] = tmp_signals
+            bars = self.bars_info[inst][self.bar_names].resample("B").last().ffill()
+            signals = self.Moskowitz(prices=bars, window=252)
+
+            signals.rename(columns={"curAdjClose": "{} signals".format(inst)}, inplace=True)
+
+            signals_info[inst] = signals
         
         return signals_info
 
     def build_forecasts(self):
         forecasts_info = {}
         for inst in list(self.signals_info.keys()):
-            tmp_signals = self.signals_info[inst].resample("B").last().ffill().mean(axis=1)
-
-            tmp_forecasts = pd.DataFrame(np.where(tmp_signals > 0, 1, -1),
+            signals = self.signals_info[inst]
+            tmp_forecasts = pd.DataFrame(np.where(signals > 0, 1, -1),
                                         columns=["{} forecasts".format(inst)],
-                                        index=tmp_signals.index)
+                                        index=signals.index)
+            
             forecasts_info[inst] = tmp_forecasts
         
         return forecasts_info
 
 if __name__ == "__main__":
-    strat_metadata = stockstsm(simulation_start=None, vol_target=0.2)
+    strat_metadata = stockstsm(simulation_start=None, vol_target=0.2, bar_names=["curAdjClose"])
 
     cerebro = Backtest(strat_metadata=strat_metadata)
 
