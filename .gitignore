@@ -2,6 +2,7 @@
 src/data/inputs/US_CRSP_NYSE/*
 src/data/outputs/*/covs_*.pickle
 src/data/outputs/*/means_*.pickle
+src/data/inputs/crsp_nyse.pickle
 
 #vscode
 .DS_store
