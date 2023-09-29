@@ -8,21 +8,17 @@ from portfolio_tools.Backtest import Backtest
 from src.utils.conn_data import load_pickle, save_pickle
 
 class stockstsm(TSM):
-    def __init__(self, simulation_start, vol_target) -> None:
-        self.sysname = "fxmmts"
-        G10 = ["USDEUR", "USDJPY", "USDAUD", "USDNZD", "USDCAD", "USDGBP", "USDCHF", "USDSEK", "USDNOK"]
-        LATAM = ['WDO1', 'USDCLP', 'USDZAR', 'USDMXN', "USDCOP"]
-        C3 = ["USDHUF", "USDPLN", "USDCZK"]
-        ASIA = ["USDCNH", "USDTWD", "USDINR", "USDKRW"]
-        self.instruments = G10 + LATAM + C3 + ASIA
+    def __init__(self, simulation_start) -> None:
+        self.sysname = "stockstsm"
+        self.instruments = ["AA", "ABM", "ABT"]
         self.simulation_start = simulation_start
-        self.vol_target = vol_target
 
         # inputs
         self.strat_inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, "{}.pickle".format(self.sysname)))
         self.bars_info = self.strat_inputs["bars"]
-        self.carry_info = self.strat_inputs["carry"]
-        self.signals_info = self.strat_inputs["signals"]
+
+        self.signals_info = self.build_signals()
+        
         self.forecasts_info = self.build_forecasts()
 
         # outputs
@@ -30,6 +26,14 @@ class stockstsm(TSM):
             self.strat_outputs = load_pickle(path=os.path.join(OUTPUT_PATH, self.sysname, "{}.pickle".format(self.sysname)))
         else:
             self.strat_outputs = None
+
+    def build_signals(self):
+        signals_info = {}
+        for inst in self.instruments:
+            tmp_signals = self.forecasts_info[inst].resample("B").last().ffill()
+            signals_info[inst] = tmp_signals
+        
+        return signals_info
 
     def build_forecasts(self):
         forecasts_info = {}
