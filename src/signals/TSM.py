@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+import pandas as pd
 
 class TSM:
     """
@@ -6,31 +8,25 @@ class TSM:
 
     Paper: https://arxiv.org/pdf/1904.04912.pdf
     """
-    def __init__(self,
-                 time_series: torch.Tensor,
-                 pred_returns: torch.Tensor
-                ) -> None:
-        #
-        super().__init__()
-        self.time_series = time_series
-        self.pred_returns = pred_returns
+    
+    def __init__(self) -> None:
+        pass
 
-    def Moskowitz(self) -> torch.Tensor:
+    def Moskowitz(self, prices: pd.DataFrame, window: int=252) -> torch.Tensor:
         """
         Moskowitz Method to compute the strategy for asset allocation.
         
         Returns:
             position_sizing (torch.tensor): Moskowitz method for Position sizing with +1 or -1
         """
-        # consider the last year
-        N = self.time_series.shape[0]
-        L = 252
-        # obtain the mean of the returns of all assets in the past L days
-        year_returns = torch.mean(self.time_series[max(0,(N - L)):N,:],axis = 0)
-        # calculate the position sizing
-        position_sizing = torch.sign(year_returns)
 
-        return position_sizing
+        # compute log returns
+        log_returns = np.log(prices / prices.shift(1))
+
+        # obtain the rolling mean of the returns of all assets in the past L days
+        window_log_returns = log_returns.rolling(window=window).mean()
+
+        return window_log_returns
     
     # BAZ method implementation
     def Baz(self,
