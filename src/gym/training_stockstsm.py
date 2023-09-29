@@ -10,9 +10,9 @@ from signals.TSM import TSM
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_pickle
 
-class stockstsm(TSM):
+class training_stockstsm(TSM):
     def __init__(self, simulation_start, vol_target, bar_name) -> None:
-        self.sysname = "stockstsm"
+        self.sysname = "training_stockstsm"
         self.instruments = ["AA", "ABM", "ABT"]
         self.simulation_start = simulation_start
         self.vol_target = vol_target
@@ -32,7 +32,7 @@ class stockstsm(TSM):
 if __name__ == "__main__":
     
     # strategy inputs
-    strat_metadata = stockstsm(simulation_start=None, vol_target=0.2, bar_name="curAdjClose")
+    strat_metadata = training_stockstsm(simulation_start=None, vol_target=0.2, bar_name="curAdjClose")
 
     # strategy hyperparameters
     windows = range(30, 252 + 1, 1)
