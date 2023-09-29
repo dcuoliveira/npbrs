@@ -31,4 +31,4 @@ if __name__ == '__main__':
     for ticker in tqdm(out_df.ticker.unique(), total=len(out_df.ticker.unique()), desc="Creating output dictionary"):
         out_dict[ticker] = out_df.loc[out_df["ticker"] == ticker].drop(["ticker"], axis=1).sort_values("date").set_index('date')
 
-    save_pickle(out_dict, os.path.join(INPUT_PATH, 'crsp_nyse.pickle'))
+    save_pickle(obj=out_dict, path=os.path.join(INPUT_PATH, 'crsp_nyse.pickle'))
