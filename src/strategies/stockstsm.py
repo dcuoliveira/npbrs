@@ -11,12 +11,12 @@ from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_pickle
 
 class stockstsm(TSM):
-    def __init__(self, simulation_start, vol_target, bar_names) -> None:
+    def __init__(self, simulation_start, vol_target, bar_name) -> None:
         self.sysname = "stockstsm"
         self.instruments = ["AA", "ABM", "ABT"]
         self.simulation_start = simulation_start
         self.vol_target = vol_target
-        self.bar_names = bar_names
+        self.bar_name = bar_name
 
         # inputs
         self.bars_info = load_pickle(os.path.join(INPUT_PATH, "crsp_nyse.pickle"))
@@ -32,10 +32,10 @@ class stockstsm(TSM):
     def build_signals(self):
         signals_info = {}
         for inst in self.instruments:
-            bars = self.bars_info[inst][self.bar_names].resample("B").last().ffill()
+            bars = self.bars_info[inst][self.bar_name].resample("B").last().ffill()
             signals = self.Moskowitz(prices=bars, window=252)
 
-            signals.rename(columns={"curAdjClose": "{} signals".format(inst)}, inplace=True)
+            signals.rename(columns={self.bar_name: "{} signals".format(inst)}, inplace=True)
 
             signals_info[inst] = signals
         
@@ -54,7 +54,7 @@ class stockstsm(TSM):
         return forecasts_info
 
 if __name__ == "__main__":
-    strat_metadata = stockstsm(simulation_start=None, vol_target=0.2, bar_names=["curAdjClose"])
+    strat_metadata = stockstsm(simulation_start=None, vol_target=0.2, bar_name="curAdjClose")
 
     cerebro = Backtest(strat_metadata=strat_metadata)
 
