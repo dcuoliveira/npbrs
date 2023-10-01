@@ -18,8 +18,6 @@ class training_stockstsm(TSM):
 
         # inputs
         self.bars_info = load_pickle(os.path.join(INPUT_PATH, "crsp_nyse.pickle"))
-        self.signals_info = self.build_signals()
-        self.forecasts_info = self.build_forecasts()
 
         # outputs
         if os.path.exists(os.path.join(OUTPUT_PATH, self.sysname, "{}.pickle".format(self.sysname))):
@@ -39,6 +37,6 @@ if __name__ == "__main__":
     for w in windows:
         strat_metadata.signals_info = strat_metadata.build_signals(window=w)
         strat_metadata.forecasts_info = strat_metadata.build_forecasts()
-
         cerebro = Backtest(strat_metadata=strat_metadata)
         cerebro.run()
+
