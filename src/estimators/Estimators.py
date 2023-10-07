@@ -66,9 +66,7 @@ class Estimators:
                                boot_method: str = "cbb",
                                Bsize: int = 50,
                                rep: int = 1000,
-                               max_p: int = 50,
-                               max_q: int = 50,
-                               alpha: float = 0.025) -> torch.Tensor:
+                               max_p: int = 50) -> torch.Tensor:
         """ 
         Method to compute the bootstrap mean of the returns.
         
@@ -79,17 +77,15 @@ class Estimators:
             rep (int): number of bootstrap samplings to get.
             max_p (int): maximum order of the AR(p) part of the ARIMA model. Only used when boot_method = "model-based".
             max_q (int): maximum order of the MA(q) part of the ARIMA model. Only used when boot_method = "model-based".
-            alpha: quantile position
 
         Returns:
-            mean (torch.tensor): alpha-quantil dependent bootstrap estimates for the mean of the returns.
+            mean (torch.tensor): dependent bootstrap estimates for the mean of the returns.
         """
         
         sampler = DependentBootstrapSampling(time_series=returns,
                                              boot_method=boot_method,
                                              Bsize=Bsize,
-                                             max_p=max_p,
-                                             max_q=max_q)
+                                             max_p=max_p)
         
         if boot_method != "sb":
             list_means = list()
@@ -98,9 +94,12 @@ class Estimators:
                 boot_mean = self.MLEMean(boot_returns)
                 list_means.append(boot_mean)
 
-        # compute the overall bootstrap sample mean
-        smeans = torch.vstack(list_means)
-        mean = torch.mean(smeans, axis=0)
+            # compute the overall bootstrap sample mean
+            smeans = torch.vstack(list_means)
+            mean = torch.mean(smeans, axis=0)
+        else:
+            boot_returns = sampler.sample()
+            mean = self.MLEMean(boot_returns)
 
         return mean
     
@@ -109,9 +108,7 @@ class Estimators:
                                      boot_method: str = "cbb",
                                      Bsize: int = 50,
                                      rep: int = 1000,
-                                     max_p: int = 50,
-                                     max_q: int = 50,
-                                     alpha: float = 0.975) -> torch.Tensor:
+                                     max_p: int = 50) -> torch.Tensor:
         """
         Method to compute the bootstrap covariance of the returns.
 
@@ -122,25 +119,64 @@ class Estimators:
             rep (int): number of bootstrap samplings to get.
             max_p (int): maximum order of the AR(p) part of the ARIMA model. Only used when boot_method = "model-based".
             max_q (int): maximum order of the MA(q) part of the ARIMA model. Only used when boot_method = "model-based".
-            alpha: quantile position
 
         Returns:
-            cov (torch.tensor): alpha-quantil dependent bootstrap estimates for the covariance of the returns.
+            cov (torch.tensor): dependent bootstrap estimates for the covariance of the returns.
         """
         
         sampler = DependentBootstrapSampling(time_series=returns,
                                              boot_method=boot_method,
                                              Bsize=Bsize,
-                                             max_p=max_p,
-                                             max_q=max_q)
+                                             max_p=max_p)
         
-        list_covs = list()
-        for _ in range(rep):
+        if boot_method != "sb":
+            list_covs = list()
+            for _ in range(rep):
+                boot_returns = sampler.sample()
+                list_covs.append(self.MLECovariance(boot_returns))
+             
+             # compute the overall bootstrap sample mean
+            scov = torch.stack(list_covs)
+            mean_scov = torch.mean(scov, axis = 0)
+        else:
             boot_returns = sampler.sample()
-            list_covs.append(self.MLECovariance(boot_returns))
 
-        # compute the overall bootstrap sample mean
-        scov = torch.stack(list_covs)
-        mean_scov = torch.mean(scov,axis = 0)
+            mean_scov = self.MLECovariance(boot_returns)
 
         return mean_scov
+    
+    # returns both mean and covariance
+    def DependentBootstrapMean_Covariance(self,
+                                     returns: torch.Tensor,
+                                     boot_method: str = "cbb",
+                                     Bsize: int = 50,
+                                     rep: int = 1000,
+                                     max_p: int = 50) -> torch.Tensor:
+        """
+        Method to compute the bootstrap mean and covariance of the returns.
+
+        Args:
+            returns (torch.tensor): returns tensor.
+            boot_method (str): bootstrap method name to build the block set. For example, "cbb".
+            Bsize (int): block size to create the block set.
+            rep (int): number of bootstrap samplings to get.
+            max_p (int): maximum order of the AR(p) part of the ARIMA model. Only used when boot_method = "model-based".
+            max_q (int): maximum order of the MA(q) part of the ARIMA model. Only used when boot_method = "model-based".
+
+        Returns: a list of pairs containig:
+            mean (torch.tensor): dependent bootstrap estimates for the mean of the returns.
+            cov (torch.tensor): dependent bootstrap estimates for the covariance of the returns.
+        """
+        
+        sampler = DependentBootstrapSampling(time_series=returns,
+                                             boot_method=boot_method,
+                                             Bsize=Bsize,
+                                             max_p=max_p)
+        
+        list_mean_covs = list()
+        for _ in range(rep):
+            boot_returns = sampler.sample()
+            list_mean_covs.append((self.MLEMean(boot_returns), self.MLECovariance(boot_returns)))
+            
+        # return the list of mean and covariance matrices
+        return list_mean_covs
