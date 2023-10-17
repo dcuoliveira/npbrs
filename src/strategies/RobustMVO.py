@@ -19,7 +19,7 @@ class RobustMVO(RobustStrategicControl):
         self.risk_aversion = risk_aversion
         self.step = step
         self.tol = tol
-        super(RobustStrategicControl, self).__init__(time_series, boot_method, B,alpha,num_iter)
+        super(RobustMVO, self).__init__(time_series, boot_method, B,alpha,num_iter)
     # 
 
     # Implement methods with Polymorphism
@@ -27,7 +27,7 @@ class RobustMVO(RobustStrategicControl):
     # Module to initialize parameters
     def init_parameters(self) -> dict:
         K = self.time_series.shape[1]
-        theta = theta = torch.Tensor(np.random.uniform(-1, 1, size = K))
+        theta = torch.Tensor(np.random.uniform(-1, 1, size = K))
         parameters = {"theta":theta}
         return parameters
     
@@ -51,7 +51,7 @@ class RobustMVO(RobustStrategicControl):
                                    bootstrap_utilities:list) -> dict:
         sorted_bootstrap_utilities = sorted(bootstrap_utilities, key=lambda utility_dict: utility_dict["value"])
         # select
-        selected_bootstrap_utilities = sorted_bootstrap_utilities[int(self.B*self.alpha)]
+        selected_bootstrap_utilities = sorted_bootstrap_utilities[int(len(bootstrap_utilities)*self.alpha)]
         parameters = {"theta":selected_bootstrap_utilities["theta"],
                       "mean":selected_bootstrap_utilities["mean"],
                       "cov":selected_bootstrap_utilities["cov"]}

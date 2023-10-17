@@ -52,7 +52,7 @@ class RobustStrategicControl:
                 break
             #
             parameters = new_parameters
-            num_iter = num_iter - 1
+            self.num_iter = self.num_iter - 1
         #
         return parameters                   
     

@@ -36,7 +36,21 @@ def timeseries_train_test_split(X, y, train_ratio):
     y_test = y[train_size:, :]
 
     return X_train, X_test, y_train, y_test
-
+#
+def timeseries_sliding_window_train(X, wsize):
+    X_train = torch.zeros(0,wsize)
+    Y_train = torch.zeros(0,1)
+    for j in range(X.shape[1]):
+        time_series = X[:,j]
+        X_rows = [X_train]
+        Y_rows = [Y_train]
+        for i in range(wsize,X.shape[0] - 1):
+            X_rows.append(time_series[(i - wsize):i])
+            Y_rows.append(time_series[i])
+        X_train = torch.vstack(X_rows) 
+        Y_train = torch.vstack(Y_rows)
+    return {"X":X_train,"Y":Y_train}
+#
 def create_rolling_indices(num_timesteps_in, num_timesteps_out, n_timesteps, fix_start):
     
     # generate rolling window indices
