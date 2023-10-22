@@ -72,6 +72,7 @@ class NNRobustStrategicControl:
             output = self.nnetwork(X_train)
             # backpropagate the loss function
             loss = self.loss_fn(output,Y_train)
-            print(loss)
+            #print(loss)
             loss.backward()
             self.optimizer.step()
+        
