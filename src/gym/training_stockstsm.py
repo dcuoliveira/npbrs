@@ -7,8 +7,9 @@ from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_pickle
+from data.ETFsLoader import ETFsLoader
 
-class training_stockstsm(TSM):
+class training_etfstsm(TSM):
     def __init__(self, simulation_start, vol_target, bar_name) -> None:
         self.sysname = "training_stockstsm"
         self.instruments = ["AA", "ABM", "ABT"]
@@ -26,9 +27,16 @@ class training_stockstsm(TSM):
             self.strat_outputs = None
 
 if __name__ == "__main__":
+
+    BUILD_STRATEGY_DATA = True
+
+    # build strategy data
+    if BUILD_STRATEGY_DATA:
+        etfs_loader = ETFsLoader()
+        
     
     # strategy inputs
-    strat_metadata = training_stockstsm(simulation_start=None, vol_target=0.2, bar_name="curAdjClose")
+    strat_metadata = training_etfstsm(simulation_start=None, vol_target=0.2, bar_name="curAdjClose")
 
     # strategy hyperparameters
     windows = range(30, 252 + 1, 1)
