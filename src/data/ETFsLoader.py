@@ -1,6 +1,7 @@
 import os
 import torch
 import pandas as pd
+import numpy as np
 
 class ETFsLoader(object):
     """
@@ -17,7 +18,7 @@ class ETFsLoader(object):
 
     def _read_data(self):
         
-        etfs_df = pd.read_csv(os.path.join(self.inputs_path, "etfs.csv"))
+        etfs_df = pd.read_csv(os.path.join(self.inputs_path, "sample", "etfs.csv"), sep=";")
         etfs_df["date"] = pd.to_datetime(etfs_df["date"])
         etfs_df.set_index("date", inplace=True)
 
@@ -30,29 +31,9 @@ class ETFsLoader(object):
 
         # dataset processing 2
         ## compute returns and subset data
-        returns_df = etfs_df.dropna().copy()
+        prices_df = etfs_df.dropna().copy()
+        returns_df = np.log(etfs_df).diff().dropna().copy()
 
-        # save indexes
-        self.index = list(returns_df.index)
-        self.columns = list(returns_df.columns)
+        self.prices = prices_df
+        self.returns = returns_df
 
-        # create tensor with (num_nodes, num_features_per_node, num_timesteps)
-        num_nodes = returns_df.shape[1]
-        num_features_per_node = 1
-        num_timesteps = returns_df.shape[0]
-
-        features = torch.zeros(num_nodes, num_features_per_node, num_timesteps)
-        returns = torch.zeros(num_nodes, num_timesteps)
-        for i in range(num_nodes):
-            # features
-            features[i, :, :] = torch.from_numpy(returns_df.loc[:, returns_df.columns[i]].values)
-
-            # returns
-            returns[i, :] = torch.from_numpy(returns_df.loc[:, returns_df.columns[i]].values)
-        
-        # create fully connected adjaneccny matrix
-        A = torch.ones(num_nodes, num_nodes)
-
-        self.A = A
-        self.features = features
-        self.returns = returns
