@@ -7,7 +7,7 @@ from data.ETFsLoader import ETFsLoader
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--strategy_name', type=str, help='strategy name to generate directory.', default="etfstsm")
+parser.add_argument('--strategy_name', type=str, help='strategy name to generate directory.', default="training_etfstsm")
 
 if __name__ == "__main__":
 
