@@ -34,6 +34,9 @@ class ETFsLoader(object):
         prices_df = etfs_df.dropna().copy()
         returns_df = np.log(etfs_df).diff().dropna().copy()
 
-        self.prices = prices_df
-        self.returns = returns_df
+        bars = {}
+        for ticker in prices_df.columns:
+            bars[ticker] = prices_df[[ticker]].rename(columns={ticker: "Close"})
+
+        self.bars = bars
 

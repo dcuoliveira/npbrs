@@ -16,14 +16,13 @@ if __name__ == "__main__":
     strategy_name = args.strategy_name
 
     etfs_loader = ETFsLoader()
-    prices = etfs_loader.prices
-    returns = etfs_loader.returns
+    bars = etfs_loader.bars
 
     # check if repo exists
     if not os.path.exists(os.path.join(INPUT_PATH, strategy_name)):
         os.makedirs(os.path.join(INPUT_PATH, strategy_name))
 
-    results = {"bars": prices}
+    results = {"bars": bars}
 
     with open(os.path.join(INPUT_PATH, strategy_name, f"{strategy_name}.pickle"), 'wb') as handle:
         pickle.dump(results,
