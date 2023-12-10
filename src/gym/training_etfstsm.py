@@ -10,7 +10,6 @@ from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_pickle
-from data.ETFsLoader import ETFsLoader
 
 class training_etfstsm(TSM):
     def __init__(self, simulation_start, vol_target, bar_name) -> None:
