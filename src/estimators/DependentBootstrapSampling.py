@@ -3,12 +3,10 @@ import torch
 import math
 import random
 import numpy as np
-# Import Statsmodels for VAR
+
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tools.eval_measures import rmse, aic
-# Class for Bootstrap Sampling
-# This class contains the different ways to generate time series samplings using bootstrap
 
 class DependentBootstrapSampling:
 
@@ -93,8 +91,13 @@ class DependentBootstrapSampling:
                 new_observation = self.Model.forecast(sampled_data[j:(j + self.P),:],1)
                 new_observation = new_observation + random_residuals[j,:]
                 sampled_data = np.vstack([sampled_data,new_observation])
-        #
-        return torch.Tensor(sampled_data)
+
+            return torch.Tensor(sampled_data)
+
+        elif self.boot_method == "sb":
+            sampled_data = random.choices(self.Blocks)[0]
+            
+            return sampled_data
     
     def create_blocks(self) -> None:
         """
@@ -124,25 +127,29 @@ class DependentBootstrapSampling:
         N = self.time_series.shape[0]
 
         Block_sets = list()
-        Ls = list()
-        Is = list()
+        for i in range(0, N, self.Bsize):
+            Block_sets_tmp = list()
+            Ls = list()
+            Is = list()
 
-        total = 0
-        i = 0
-        while total < N:
+            total = 0
+            i = 0
+            while total < N:
 
-            # write me a line of code to generate a random integer number between 1 and N
-            L = np.random.geometric(p=0.5, size=1)[0]
-            I = random.randint(0, N - L)
+                # write me a line of code to generate a random integer number between 1 and N
+                I = random.randint(1, N)
+                L = np.random.geometric(p=0.5, size=1)[0]
 
-            Block = self.time_series[I:(I + L), :]
-            Block_sets.append(Block)
+                Block = self.time_series[I:(I + L), :]
+                Block_sets_tmp.append(Block)
 
-            Ls.append(L)
-            Is.append(I)
+                Ls.append(L)
+                Is.append(I)
 
-            total += L
-            i += 1
+                total += L
+                i += 1
+            
+            Block_sets.append(torch.vstack(Block_sets_tmp))
 
         return Block_sets
     
