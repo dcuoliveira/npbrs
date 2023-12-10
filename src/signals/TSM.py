@@ -18,6 +18,8 @@ class TSM:
         
         Returns:
             position_sizing (torch.tensor): Moskowitz method for Position sizing with +1 or -1
+
+        Paper: Moskowitz et al. (2012) - Time Series Momentum.
         """
 
         # compute log returns
