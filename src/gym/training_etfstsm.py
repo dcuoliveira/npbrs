@@ -11,14 +11,14 @@ from data.ETFsLoader import ETFsLoader
 
 class training_etfstsm(TSM):
     def __init__(self, simulation_start, vol_target, bar_name) -> None:
-        self.sysname = "training_stockstsm"
+        self.sysname = "training_etfstsm"
         self.instruments = ["AA", "ABM", "ABT"]
         self.simulation_start = simulation_start
         self.vol_target = vol_target
         self.bar_name = bar_name
 
         # inputs
-        self.bars_info = load_pickle(os.path.join(INPUT_PATH, "crsp_nyse.pickle"))
+        inputs = load_pickle(os.path.join(INPUT_PATH, "crsp_nyse.pickle"))
 
         # outputs
         if os.path.exists(os.path.join(OUTPUT_PATH, self.sysname, "{}.pickle".format(self.sysname))):
@@ -27,13 +27,6 @@ class training_etfstsm(TSM):
             self.strat_outputs = None
 
 if __name__ == "__main__":
-
-    BUILD_STRATEGY_DATA = True
-
-    # build strategy data
-    if BUILD_STRATEGY_DATA:
-        etfs_loader = ETFsLoader()
-        
     
     # strategy inputs
     strat_metadata = training_etfstsm(simulation_start=None, vol_target=0.2, bar_name="curAdjClose")
