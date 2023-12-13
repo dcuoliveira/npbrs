@@ -18,6 +18,12 @@ class DependentBootstrapSampling:
         """
         This class contains the different ways to generate dependent bootstrap samples.
 
+        Available methods are:
+        - Non-overlapping Block Bootstrap (nobb)
+        - Circular Block Bootstrap (cbb)
+        - Stationary Bootstrap (sb)
+        - Model-based / Residual-based Bootstrap (rbb)
+
         Args:
             time_series (torch.Tensor): time series array
             boot_method (str): bootstrap method name to build the block set. For example, "cbb".
@@ -236,3 +242,46 @@ class DependentBootstrapSampling:
         results = model.fit(maxlags = max_p, ic='aic')
         #
         return (results.k_ar)
+    
+DEBUG = False
+
+if __name__ == "__main__":
+    if DEBUG:
+        import sys
+        import os
+
+        sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__))))
+
+        import pandas as pd
+
+        from settings import INPUT_PATH
+        from utils.conn_data import load_pickle
+
+        sysname = "training_etfstsm"
+        instruments = [
+
+            'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
+            'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
+            'XLE', 'VIX', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
+
+        ]
+        bar_name = "Close"
+
+        # inputs
+        inputs = load_pickle(os.path.join(INPUT_PATH, sysname, f"{sysname}.pickle"))
+        bars_info = inputs["bars"]
+
+        input = []
+        for instrument in instruments:
+            input.append(bars_info[instrument][[bar_name]].rename(columns={bar_name: instrument}))
+
+        input_df = pd.concat(input, axis=1)
+        input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+
+        boostrap = DependentBootstrapSampling(time_series=input_tensor,
+                                              boot_method="cbb",
+                                              Bsize=input_df.shape[0])
+        
+        print(len(boostrap.Blocks))
+
+        first_block = boostrap.Blocks[0]
