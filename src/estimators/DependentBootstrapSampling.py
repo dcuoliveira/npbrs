@@ -47,6 +47,25 @@ class DependentBootstrapSampling:
         else:
             self.create_VAR_model(max_p = max_p)
 
+    def sample_many_paths(self, k: int) -> torch.Tensor:
+        """
+        Apply the sample function k times.
+
+        
+        Args:
+            k (int): number of samples to generate.
+
+        Returns:
+            all_samples (torch.Tensor): all sampled data
+        """
+
+        all_samples = []
+        for i in range(k):
+            sampled_data = self.sample()
+            all_samples.append(sampled_data)
+        
+        return torch.stack(all_samples)
+
     def sample(self) -> torch.Tensor:
         """"
         Method to generate a sampling according to the method.
@@ -280,8 +299,6 @@ if __name__ == "__main__":
 
         boostrap = DependentBootstrapSampling(time_series=input_tensor,
                                               boot_method="cbb",
-                                              Bsize=input_df.shape[0])
+                                              Bsize=100)
         
-        print(len(boostrap.Blocks))
-
-        first_block = boostrap.Blocks[0]
+        all_samples = boostrap.sample_many_paths(k=100)
