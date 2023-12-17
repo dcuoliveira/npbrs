@@ -74,8 +74,8 @@ class Backtest(Diagnostics):
         scaled_portfolio_returns = vol_scale * portfolio_returns
 
         # aggregate portfolio returns
-        self.agg_portfolio_returns = portfolio_returns.sum(axis=1)
-        self.agg_scaled_portfolio_returns = scaled_portfolio_returns.sum(axis=1)
+        self.agg_portfolio_returns = pd.DataFrame(portfolio_returns.sum(axis=1), columns=["portfolio_returns"])
+        self.agg_scaled_portfolio_returns = pd.DataFrame(scaled_portfolio_returns.sum(axis=1), columns=["portfolio_returns"])
 
 
         
