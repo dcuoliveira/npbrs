@@ -14,13 +14,15 @@ class Diagnostics:
         pass
 
     def compute_summary_statistics(self,
-                                   portfolio_returns: torch.tensor,
+                                   portfolio_returns: pd.DataFrame,
                                    default_metrics: list = [ExpectedRet, Volatility, Sharpe, Sortino, AverageDD, MaxDD, PositiveRetRatio]):
         
+        torch_portfolio_returns = torch.tensor(portfolio_returns.values)
+
         portfolio_stats = {}
         for metric in default_metrics:
             metric = metric()
-            portfolio_stats[metric.name] = metric.forward(returns=portfolio_returns).item()
+            portfolio_stats[metric.name] = metric.forward(returns=torch_portfolio_returns).item()
 
         return portfolio_stats
 
