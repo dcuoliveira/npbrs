@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
@@ -135,7 +136,9 @@ if __name__ == "__main__":
     windows = range(30, 252 + 1, 1)
 
     # strategy optimization
-    for w in windows:
+    pbar = tqdm(enumerate(windows), total=len(windows))
+    utilities = {}
+    for trial, w in enumerate(windows):
         # for a given window, build signals from bootstrap samples
         strategy.bootstrap_signals_info = strategy.build_signals_from_bootstrap_samples(window=w)
 
@@ -143,6 +146,7 @@ if __name__ == "__main__":
         strategy.bootstrap_forecasts_info = strategy.build_forecasts_from_bootstrap_signals()
 
         # run backtest for each boostrap samples
+        utilities_given_hyperparam = {}
         for i in range(strategy.n_bootstrap_samples):
             # build signals info
             strategy.signals_info = strategy.bootstrap_signals_info[f"bootstrap_{i}"]
@@ -159,7 +163,16 @@ if __name__ == "__main__":
                                  resample_freq="B")
             
             # compute strategy performance
-            utilities = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
+            metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
+            utilities_given_hyperparam[f"bootstrap_{i}"] = metrics
+        
+        utilities[f"trial_{trial}"] = utilities_given_hyperparam
+        
+        # update pbar and add iterative message
+        pbar.set_description(f"Running RSC Algo for Trial: {trial}")
+
+
+        
 
             
 
