@@ -12,7 +12,7 @@ class TSM:
     def __init__(self) -> None:
         pass
 
-    def Moskowitz(self, prices: pd.DataFrame, window: int=252) -> torch.Tensor:
+    def Moskowitz(self, returns: pd.DataFrame, window: int=252) -> torch.Tensor:
         """
         Moskowitz Method to compute the strategy for asset allocation.
         
@@ -22,13 +22,10 @@ class TSM:
         Paper: Moskowitz et al. (2012) - Time Series Momentum.
         """
 
-        # compute log returns
-        log_returns = np.log(prices / prices.shift(1))
-
         # obtain the rolling mean of the returns of all assets in the past L days
-        window_log_returns = log_returns.rolling(window=window).mean()
+        momentum = returns.rolling(window=window).mean()
 
-        return window_log_returns
+        return momentum
     
     # BAZ method implementation
     def Baz(self,
