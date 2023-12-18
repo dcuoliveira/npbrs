@@ -34,7 +34,6 @@ class DependentBootstrapSampling:
         Returns:
             None
         """
-        super().__init__()
         self.time_series = time_series
         self.Bsize = Bsize # not used when "boot_method" is "rbb".
         self.boot_method = boot_method
