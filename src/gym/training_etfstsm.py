@@ -11,10 +11,11 @@ from tqdm import tqdm
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
 from estimators.DependentBootstrapSampling import DependentBootstrapSampling
+from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_pickle
 
-class training_etfstsm(TSM, DependentBootstrapSampling):
+class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  simulation_start: str,
                  vol_target: float,
@@ -46,6 +47,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling):
         None.
 
         """
+
+        Functionals.__init__(self)
     
         # init strategy attributes
         self.sysname = "training_etfstsm"
@@ -153,15 +156,22 @@ class training_etfstsm(TSM, DependentBootstrapSampling):
 
 if __name__ == "__main__":
     
+    utility = "Sharpe"
+    utility_agg = "mean"
+
     # strategy inputs
-    strategy = training_etfstsm(simulation_start=None, vol_target=0.2, bar_name="Close")
+    strategy = training_etfstsm(simulation_start=None,
+                                vol_target=0.2,
+                                bar_name="Close",
+                                k=10)
 
     # strategy hyperparameters
-    windows = range(30, 252 + 1, 1)
+    # windows = range(30, 252 + 1, 1)
+    windows = range(30, 35 + 1, 1)
 
     # strategy optimization
     pbar = tqdm(enumerate(windows), total=len(windows))
-    utilities = {}
+    utilities = []
     for trial, w in enumerate(windows):
         # for a given window, build signals from bootstrap samples
         strategy.bootstrap_signals_info = strategy.build_signals_from_bootstrap_samples(window=w)
@@ -170,7 +180,7 @@ if __name__ == "__main__":
         strategy.bootstrap_forecasts_info = strategy.build_forecasts_from_bootstrap_signals()
 
         # run backtest for each boostrap samples
-        utilities_given_hyperparam = {}
+        utilities_given_hyperparam = []
         for i in range(strategy.n_bootstrap_samples):
             # build signals info
             strategy.signals_info = strategy.bootstrap_signals_info[f"bootstrap_{i}"]
@@ -188,12 +198,19 @@ if __name__ == "__main__":
             
             # compute strategy performance
             metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
-            utilities_given_hyperparam[f"bootstrap_{i}"] = metrics
+            utilities_given_hyperparam.append(metrics[utility])
         
-        utilities[f"trial_{trial}"] = utilities_given_hyperparam
+        if utility_agg == "mean":
+            final_utility = np.mean(utilities_given_hyperparam)
+
+        utilities.append(final_utility)
         
         # update pbar and add iterative message
-        pbar.set_description(f"Running RSC Algo for Trial: {trial}")
+        pbar.set_description(f"Running RSC Algo for Trial {trial}")
+        pbar.update(1)
+    
+    # apply functional to utilities
+    a = strategy.apply_functional(x=torch.tensor(utilities), func=utility_agg)
 
 
         
