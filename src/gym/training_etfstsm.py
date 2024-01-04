@@ -22,6 +22,30 @@ class training_etfstsm(TSM, DependentBootstrapSampling):
                  boot_method: str = "cbb",
                  Bsize: int = 100,
                  k: int = 100) -> None:
+        """
+        This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
+        It is used to train the ETF TSM strategy.
+
+        Parameters
+        ----------
+        simulation_start : str
+            The date from which to start the simulation.
+        vol_target : float
+            The target volatility of the strategy.
+        bar_name : str
+            The name of the bar to use for the strategy.
+        boot_method : str, optional
+            The bootstrap method to use. The default is "cbb".
+        Bsize : int, optional
+            The size of the bootstrap samples. The default is 100.
+        k : int, optional
+            The number of bootstrap samples to generate. The default is 100.
+
+        Returns
+        -------
+        None.
+
+        """
     
         # init strategy attributes
         self.sysname = "training_etfstsm"
