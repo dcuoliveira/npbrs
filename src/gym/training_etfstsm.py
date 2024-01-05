@@ -7,13 +7,15 @@ import pandas as pd
 import numpy as np
 import torch
 from tqdm import tqdm
+import multiprocessing
+from multiprocessing import Pool
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
 from estimators.DependentBootstrapSampling import DependentBootstrapSampling
 from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
-from utils.conn_data import load_pickle, save_pickle
+from utils.conn_data import load_pickle
 
 class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
@@ -23,7 +25,9 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                  boot_method: str = "cbb",
                  Bsize: int = 100,
                  k: int = 100,
-                 alpha: float=0.95) -> None:
+                 alpha: float=0.95,
+                 utility: str="Sharpe",
+                 functional: str="means") -> None:
         """
         This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
         It is used to train the ETF TSM strategy.
@@ -44,6 +48,10 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             The number of bootstrap samples to generate. The default is 100.
         alpha : float, optional
             The percentile to use for the functional. The default is 0.95.
+        utility : str, optional
+            The utility function to use. The default is "Sharpe".
+        functional : str, optional
+            The functional to use. The default is "means".
 
         Returns
         -------
@@ -156,6 +164,41 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                 bootrap_forecasts[f"bootstrap_{i}"] = forecasts
     
             return bootrap_forecasts
+    
+def objective(params):
+    strategy = params["strategy"]
+    window = params["window"]
+
+    # for a given window, build signals from bootstrap samples
+    strategy.bootstrap_signals_info = strategy.build_signals_from_bootstrap_samples(window=window)
+
+    # build forecasts from bootstrap signals
+    strategy.bootstrap_forecasts_info = strategy.build_forecasts_from_bootstrap_signals()
+
+    # run backtest for each boostrap samples
+    utilities_given_hyperparam = []
+    for i in range(strategy.n_bootstrap_samples):
+        # build signals info
+        strategy.signals_info = strategy.bootstrap_signals_info[f"bootstrap_{i}"]
+
+        # build forecasts info
+        strategy.forecasts_info = strategy.bootstrap_forecasts_info[f"bootstrap_{i}"]
+
+        # run backtest
+        cerebro = Backtest(strat_metadata=strategy)
+        cerebro.run_backtest(instruments=strategy.instruments,
+                                bar_name=strategy.bar_name,
+                                vol_window=252,
+                                vol_target=strategy.vol_target,
+                                resample_freq="B")
+        
+        # compute strategy performance
+        metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
+        utilities_given_hyperparam.append(metrics[strategy.utility])
+
+    utilities.append(torch.tensor(utilities_given_hyperparam))
+    
+    return utilities
 
 if __name__ == "__main__":
     
@@ -168,49 +211,25 @@ if __name__ == "__main__":
                                 vol_target=0.2,
                                 bar_name="Close",
                                 k=10,
-                                alpha=alpha)
+                                alpha=alpha,
+                                utility=utility,
+                                functional=functional)
 
     # strategy hyperparameters
     # windows = range(30, 252 + 1, 1)
     windows = range(30, 35 + 1, 1)
+    cpu_count = 4 # multiprocessing.cpu_count()
 
-    # strategy optimization
-    pbar = tqdm(enumerate(windows), total=len(windows))
-    utilities = []
-    for trial, w in enumerate(windows):
-        # for a given window, build signals from bootstrap samples
-        strategy.bootstrap_signals_info = strategy.build_signals_from_bootstrap_samples(window=w)
+    # define multiprocessing pool
+    pool = multiprocessing.Pool(processes=cpu_count)
 
-        # build forecasts from bootstrap signals
-        strategy.bootstrap_forecasts_info = strategy.build_forecasts_from_bootstrap_signals()
+    # define parameters list for the objective
+    parameters_list = [{'strategy': strategy, 'window': w} for w in windows]
 
-        # run backtest for each boostrap samples
-        utilities_given_hyperparam = []
-        for i in range(strategy.n_bootstrap_samples):
-            # build signals info
-            strategy.signals_info = strategy.bootstrap_signals_info[f"bootstrap_{i}"]
+    # run objectives in parallel
+    with Pool(processes=multiprocessing.cpu_count()) as pool:
+        utilities = pool.map(objective, parameters_list)
 
-            # build forecasts info
-            strategy.forecasts_info = strategy.bootstrap_forecasts_info[f"bootstrap_{i}"]
-
-            # run backtest
-            cerebro = Backtest(strat_metadata=strategy)
-            cerebro.run_backtest(instruments=strategy.instruments,
-                                 bar_name=strategy.bar_name,
-                                 vol_window=252,
-                                 vol_target=strategy.vol_target,
-                                 resample_freq="B")
-            
-            # compute strategy performance
-            metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
-            utilities_given_hyperparam.append(metrics[utility])
-
-        utilities.append(torch.tensor(utilities_given_hyperparam))
-        
-        # update pbar and add iterative message
-        pbar.set_description(f"Running RSC Algo for Trial {trial}")
-        pbar.update(1)
-    
     # apply functional to utilities
     final_utility = strategy.apply_functional(x=utilities, func=functional)
 
