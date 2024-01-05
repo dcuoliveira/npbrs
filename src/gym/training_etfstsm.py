@@ -22,7 +22,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                  bar_name: str,
                  boot_method: str = "cbb",
                  Bsize: int = 100,
-                 k: int = 100) -> None:
+                 k: int = 100,
+                 alpha: float=0.95) -> None:
         """
         This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
         It is used to train the ETF TSM strategy.
@@ -41,6 +42,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             The size of the bootstrap samples. The default is 100.
         k : int, optional
             The number of bootstrap samples to generate. The default is 100.
+        alpha : float, optional
+            The percentile to use for the functional. The default is 0.95.
 
         Returns
         -------
@@ -48,7 +51,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
 
         """
 
-        Functionals.__init__(self)
+        Functionals.__init__(self, alpha=alpha)
     
         # init strategy attributes
         self.sysname = "training_etfstsm"
@@ -157,13 +160,15 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
 if __name__ == "__main__":
     
     utility = "Sharpe"
-    utility_agg = "mean"
+    functional = "means"
+    alpha = 0.95
 
     # strategy inputs
     strategy = training_etfstsm(simulation_start=None,
                                 vol_target=0.2,
                                 bar_name="Close",
-                                k=10)
+                                k=10,
+                                alpha=alpha)
 
     # strategy hyperparameters
     # windows = range(30, 252 + 1, 1)
@@ -199,18 +204,22 @@ if __name__ == "__main__":
             # compute strategy performance
             metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
             utilities_given_hyperparam.append(metrics[utility])
-        
-        if utility_agg == "mean":
-            final_utility = np.mean(utilities_given_hyperparam)
 
-        utilities.append(final_utility)
+        utilities.append(torch.tensor(utilities_given_hyperparam))
         
         # update pbar and add iterative message
         pbar.set_description(f"Running RSC Algo for Trial {trial}")
         pbar.update(1)
     
     # apply functional to utilities
-    a = strategy.apply_functional(x=torch.tensor(utilities), func=utility_agg)
+    final_utility = strategy.apply_functional(x=utilities, func=functional)
+
+    # find position of scores that match final_utility
+    position = strategy.find_utility_position(utilities=utilities, utility_value=final_utility)
+
+    # find window that matches position
+    robust_parameter = windows[position]
+
 
 
         
