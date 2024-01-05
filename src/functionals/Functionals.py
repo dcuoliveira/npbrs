@@ -106,14 +106,42 @@ class Functionals:
         """
 
         if func == "eigenvalues":
-            scores = self.eigenvalues(x)
+            self.scores = self.eigenvalues(x)
         elif func == "means":
-            scores = self.means(x)
+            self.scores = self.means(x)
         elif func == "utility":
-            scores = self.utility(x)
+            self.scores = self.utility(x)
         else:
             raise ValueError("Functional not implemented.")
 
-        x_selected = self.percentile(x, scores, alpha=self.alpha)
+        x_selected = self.percentile(x, self.scores, alpha=self.alpha)
         
         return x_selected
+    
+    
+    def find_utility_position(self, utilities, utility_value):
+        """
+        Find the position of the utility tensor corresponding to the given final utility valuer.
+
+        Parameters
+        ----------
+        utilities : list
+            List of utilities.
+        utility_value : float
+            Final utility value.
+        
+        Returns
+        -------
+        int
+            Position of the utility tensor corresponding to the given final utility valuer.
+
+        """
+        
+        for i, utility in enumerate(utilities):
+
+            check = (torch.sum(utility == utility_value) == len(utility))
+
+            if check:
+                return i
+            
+        return None
