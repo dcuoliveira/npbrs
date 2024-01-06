@@ -206,7 +206,10 @@ def objective(params):
 
 # number of open files is small solve with
 # https://stackoverflow.com/questions/34588/how-do-i-change-the-number-of-open-files-limit-in-linux/8285278#8285278
-os.system("ulimit -n 64000")
+
+# IMPORTANT
+
+# execute in the terminal: ulimit -n 64000
 
 # deep copy
 import copy
