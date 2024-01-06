@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -107,6 +108,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             self.strat_outputs = load_pickle(path=os.path.join(OUTPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
         else:
             self.strat_outputs = None
+        # utilities
+        self.utility = utility
 
     def build_returns(self):
         returns = []
@@ -196,9 +199,17 @@ def objective(params):
         metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
         utilities_given_hyperparam.append(metrics[strategy.utility])
 
-    utilities.append(torch.tensor(utilities_given_hyperparam))
+    return (torch.tensor(utilities_given_hyperparam))
+    #utilities.append(torch.tensor(utilities_given_hyperparam))
     
-    return utilities
+    #return utilities
+
+# number of open files is small solve with
+# https://stackoverflow.com/questions/34588/how-do-i-change-the-number-of-open-files-limit-in-linux/8285278#8285278
+os.system("ulimit -n 64000")
+
+# deep copy
+import copy
 
 if __name__ == "__main__":
     
@@ -221,16 +232,16 @@ if __name__ == "__main__":
     cpu_count = 4 # multiprocessing.cpu_count()
 
     # define multiprocessing pool
-    pool = multiprocessing.Pool(processes=cpu_count)
+    utilities = []
 
-    # define parameters list for the objective
-    parameters_list = [{'strategy': strategy, 'window': w} for w in windows]
+    with multiprocessing.Pool(processes=cpu_count) as pool:
 
-    # run objectives in parallel
-    with Pool(processes=multiprocessing.cpu_count()) as pool:
-        utilities = pool.map(objective, parameters_list)
+        # define parameters list for the objective
+        parameters_list = [{'strategy': copy.deepcopy(strategy), 'window': w} for w in windows]
 
-    # apply functional to utilities
+        utilities = pool.map(objective,parameters_list)
+        
+    # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=functional)
 
     # find position of scores that match final_utility
@@ -238,7 +249,7 @@ if __name__ == "__main__":
 
     # find window that matches position
     robust_parameter = windows[position]
-
+    print(robust_parameter)
 
 
         
