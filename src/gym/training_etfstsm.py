@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import multiprocessing
 import copy
+import argparse
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
@@ -200,29 +201,36 @@ def objective(params):
     return (torch.tensor(utilities_given_hyperparam))
 
 if __name__ == "__main__":
-    
-    utility = "Sharpe"
-    functional = "means"
-    alpha = 0.95
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
+    parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
+    parser.add_argument('--alpha', type=float, help='Confidence level for the rank of the estimates.', default=0.95)
+    parser.add_argument('--k', type=float, help='Number of bootstrap samples.', default=100)
+    parser.add_argument('--cpu_count', type=float, help='Number of CPUs to parallelize process.', default=-1)
+
+    args = parser.parse_args()
+
+    if args.cpu_count == -1:
+        args.cpu_count = multiprocessing.cpu_count() - 1
 
     # strategy inputs
     strategy = training_etfstsm(simulation_start=None,
                                 vol_target=0.2,
                                 bar_name="Close",
-                                k=10,
-                                alpha=alpha,
-                                utility=utility,
-                                functional=functional)
+                                k=args.k,
+                                alpha=args.alpha,
+                                utility=args.utility,
+                                functional=args.functional)
 
     # strategy hyperparameters
-    # windows = range(30, 252 + 1, 1)
-    windows = range(30, 35 + 1, 1)
-    cpu_count = 4 # multiprocessing.cpu_count()
+    windows = range(30, 252 + 1, 1)
 
     # define multiprocessing pool
     utilities = []
 
-    with multiprocessing.Pool(processes=cpu_count) as pool:
+    with multiprocessing.Pool(processes=args.cpu_count) as pool:
 
         # define parameters list for the objective
         parameters_list = [{'strategy': copy.deepcopy(strategy), 'window': w} for w in windows]
@@ -230,7 +238,7 @@ if __name__ == "__main__":
         utilities = pool.map(objective,parameters_list)
         
     # applying the functional
-    final_utility = strategy.apply_functional(x=utilities, func=functional)
+    final_utility = strategy.apply_functional(x=utilities, func=args.functional)
 
     # find position of scores that match final_utility
     position = strategy.find_utility_position(utilities=utilities, utility_value=final_utility)
