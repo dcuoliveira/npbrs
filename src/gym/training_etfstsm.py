@@ -1,15 +1,13 @@
 import sys
 import os
-import time
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import pandas as pd
 import numpy as np
 import torch
-from tqdm import tqdm
 import multiprocessing
-from multiprocessing import Pool
+import copy
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
@@ -200,19 +198,6 @@ def objective(params):
         utilities_given_hyperparam.append(metrics[strategy.utility])
 
     return (torch.tensor(utilities_given_hyperparam))
-    #utilities.append(torch.tensor(utilities_given_hyperparam))
-    
-    #return utilities
-
-# number of open files is small solve with
-# https://stackoverflow.com/questions/34588/how-do-i-change-the-number-of-open-files-limit-in-linux/8285278#8285278
-
-# IMPORTANT
-
-# execute in the terminal: ulimit -n 64000
-
-# deep copy
-import copy
 
 if __name__ == "__main__":
     
