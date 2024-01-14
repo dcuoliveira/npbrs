@@ -96,8 +96,12 @@ def save_pickle(path: str,
 
 def load_pickle(path: str):
 
+    # open file
     with open(path, 'rb') as handle:
         target_dict = pickle.load(handle)
+    
+    # close file
+    handle.close()
 
     return target_dict
 
