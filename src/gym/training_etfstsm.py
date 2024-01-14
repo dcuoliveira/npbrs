@@ -15,7 +15,7 @@ from signals.TSM import TSM
 from estimators.DependentBootstrapSampling import DependentBootstrapSampling
 from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
-from utils.conn_data import load_pickle
+from utils.conn_data import load_pickle, save_strat_opt_results
 
 class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
@@ -79,14 +79,14 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         self.bars_info = inputs["bars"]
 
         # returns
-        self.returns = self.build_returns()
+        self.returns_info = self.build_returns()
 
         # carry
         self.carry_info = None
 
         # generate bootstrap samples from returns
         DependentBootstrapSampling.__init__(self,
-                                            time_series=torch.tensor(self.returns.to_numpy()),
+                                            time_series=torch.tensor(self.returns_info.to_numpy()),
                                             boot_method=boot_method,
                                             Bsize=Bsize)
         self.all_samples = self.sample_many_paths(k=k)
@@ -98,15 +98,6 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         # generate forecasts from from bootstrap signals
         self.bootstrap_forecasts_info = None
 
-        # check if dir exists
-        if not os.path.exists(os.path.join(OUTPUT_PATH, self.sysname)):
-            os.makedirs(os.path.join(OUTPUT_PATH, self.sysname))
-
-        # export outputs
-        if os.path.exists(os.path.join(OUTPUT_PATH, self.sysname, f"{self.sysname}.pickle")):
-            self.strat_outputs = load_pickle(path=os.path.join(OUTPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
-        else:
-            self.strat_outputs = None
         # utilities
         self.utility = utility
 
@@ -123,15 +114,15 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def build_signals(self, window: int):
         signals = {}
         for instrument in self.instruments:
-            signal = self.Moskowitz(prices=self.bars_info[instrument][[self.bar_name]], window=window)
-            signals[instrument] = signal
+            signal = self.Moskowitz(returns=self.returns_info[[f"{instrument}_returns"]], window=window)
+            signals[instrument] = signal.rename(columns={f"{instrument}_returns": self.bar_name})
             
         return signals
     
     def build_forecasts(self):
         forecasts = {}
         for instrument in self.instruments:
-            forecast = np.where(self.signals_info[instrument][[f"{instrument}_signals"]] > 0, 1, -1)
+            forecast = np.where(self.signals_info[instrument][[self.bar_name]] > 0, 1, -1)
 
             forecasts[instrument] = pd.DataFrame(forecast,
                                                  index=self.signals_info[instrument].index,
@@ -143,7 +134,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         bootrap_signals = {}
         for i in range(self.n_bootstrap_samples):
             signals = {}
-            sample_df = pd.DataFrame(self.all_samples[i, :, :], columns=self.instruments, index=self.returns.index)
+            sample_df = pd.DataFrame(self.all_samples[i, :, :], columns=self.instruments, index=self.returns_info.index)
             for instrument in self.instruments:
                 signal = self.Moskowitz(returns=sample_df[[instrument]], window=window)
                 signals[instrument] = signal.rename(columns={instrument: self.bar_name})
@@ -207,7 +198,7 @@ if __name__ == "__main__":
     parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
     parser.add_argument('--alpha', type=float, help='Confidence level for the rank of the estimates.', default=0.95)
-    parser.add_argument('--k', type=float, help='Number of bootstrap samples.', default=100)
+    parser.add_argument('--k', type=float, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=float, help='Number of CPUs to parallelize process.', default=-1)
 
     args = parser.parse_args()
@@ -225,7 +216,8 @@ if __name__ == "__main__":
                                 functional=args.functional)
 
     # strategy hyperparameters
-    windows = range(30, 252 + 1, 1)
+    # windows = range(30, 252 + 1, 1)
+    windows = range(30, 35 + 1, 1)
 
     # define multiprocessing pool
     utilities = []
@@ -245,7 +237,30 @@ if __name__ == "__main__":
 
     # find window that matches position
     robust_parameter = windows[position]
-    print(robust_parameter)
+
+    # save relevant attributes fro optimization
+    strategy.utilities = utilities
+    strategy.windows = windows
+    strategy.final_utility = final_utility
+    strategy.robust_parameter = robust_parameter
+
+    # run strategy with robust parameter
+    strategy.signals_info = strategy.build_signals(window=robust_parameter)
+    strategy.forecasts_info = strategy.build_forecasts()
+    cerebro = Backtest(strat_metadata=strategy)
+    cerebro.run_backtest(instruments=strategy.instruments,
+                         bar_name=strategy.bar_name,
+                         vol_window=252,
+                         vol_target=strategy.vol_target,
+                         resample_freq="B")
+    
+    results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
+
+    save_strat_opt_results(results_path=results_path,
+                           args=args,
+                           cerebro=cerebro,
+                           strategy=strategy)
+
 
 
         
