@@ -100,3 +100,34 @@ def load_pickle(path: str):
         target_dict = pickle.load(handle)
 
     return target_dict
+
+def save_strat_opt_results(results_path: str, args: dict, cerebro: object, strategy: object):
+
+    # check if path exists
+    if not os.path.exists(results_path):
+        os.makedirs(results_path)
+
+    # define opt results
+    opt_results = {
+        'hyperparameters': {'windows': strategy.windows},
+        'utilities': strategy.utilities,
+        'final_utility': strategy.final_utility,
+        'robust_parameter': strategy.robust_parameter
+    }
+
+    # define portfolio results
+    portfolio_results = {
+        'bars': cerebro.bars_df,
+        'signals': cerebro.signals_df,
+        'forecasts': cerebro.forecasts_df,
+        'vols': cerebro.vols_df,
+        'portfolio_returns': cerebro.portfolio_returns,
+        'agg_portfolio_returns': cerebro.agg_portfolio_returns,
+        'scaled_portfolio_returns': cerebro.scaled_portfolio_returns,
+        'agg_scaled_portfolio_returns': cerebro.agg_scaled_portfolio_returns,
+    }
+    
+    # save results
+    save_pickle(path=os.path.join(results_path, "args.pickle"), obj=args)
+    save_pickle(path=os.path.join(results_path, "portfolio_results.pickle"), obj=portfolio_results)
+    save_pickle(path=os.path.join(results_path, "opt_results.pickle"), obj=opt_results)
