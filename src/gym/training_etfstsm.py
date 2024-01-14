@@ -216,8 +216,7 @@ if __name__ == "__main__":
                                 functional=args.functional)
 
     # strategy hyperparameters
-    # windows = range(30, 252 + 1, 1)
-    windows = range(30, 35 + 1, 1)
+    windows = range(30, 252 + 1, 1)
 
     # define multiprocessing pool
     utilities = []
