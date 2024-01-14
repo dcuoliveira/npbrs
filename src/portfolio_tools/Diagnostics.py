@@ -25,25 +25,3 @@ class Diagnostics:
             portfolio_stats[metric.name] = metric.forward(returns=torch_portfolio_returns).item()
 
         return portfolio_stats
-
-DEBUG = False
-
-if __name__ == "__main__":
-
-    if DEBUG:
-        import os
-        import pandas as pd
-
-        model = "ew"
-        output_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                   "data",
-                                   "outputs",
-                                   model)
-        
-        summary = pd.read_csv(os.path.join(output_path, "summary.csv"))
-        summary["pnl"] = summary["returns"] * summary["weights"]
-        summary["model"] = model
-
-        cum_pnl_df = torch.tensor(summary.loc[summary["model"] == model].groupby("date").sum()["pnl"])
-
-        stats = compute_summary_statistics(portfolio_returns=cum_pnl_df)
