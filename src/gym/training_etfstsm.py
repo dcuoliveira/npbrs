@@ -17,6 +17,8 @@ from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_strat_opt_results
 
+inputs = load_pickle(os.path.join(INPUT_PATH, "training_etfstsm", "training_etfstsm.pickle"))
+
 class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  simulation_start: str,
@@ -75,7 +77,6 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         self.bar_name = bar_name
 
         # inputs
-        inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
         self.bars_info = inputs["bars"]
 
         # returns
