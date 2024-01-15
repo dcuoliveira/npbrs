@@ -10,14 +10,12 @@ import multiprocessing
 import copy
 import argparse
 
-from settings import OUTPUT_PATH
+from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
 from estimators.DependentBootstrapSampling import DependentBootstrapSampling
 from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
-from utils.conn_data import save_strat_opt_results
-
-from teste import inputs
+from utils.conn_data import load_pickle, save_strat_opt_results
 
 class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
@@ -77,6 +75,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         self.bar_name = bar_name
 
         # inputs
+        inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
         self.bars_info = inputs["bars"]
 
         # returns
