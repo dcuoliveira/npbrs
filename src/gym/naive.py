@@ -59,7 +59,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                                             boot_method=boot_method,
                                             Bsize=Bsize)
         # self.all_samples = self.sample_many_paths(k=k)
-        # self.n_bootstrap_samples = self.all_samples.shape[0]
+        self.n_bootstrap_samples = k
 
     def build_returns(self):
         returns = []
