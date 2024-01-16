@@ -72,12 +72,22 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         return returns_df
     
 def objective(params):
-    # Extract the strategy and window from params
-    strategy = params['strategy']
+    # Initialize strategy within each process
+    local_strategy = training_etfstsm(
+        simulation_start=params['simulation_start'],
+        vol_target=params['vol_target'],
+        bar_name=params['bar_name'],
+        boot_method=params['boot_method'],
+        Bsize=params['Bsize'],
+        k=params['k'],
+        alpha=params['alpha'],
+        utility=params['utility'],
+        functional=params['functional']
+    )
 
     # run backtest for each boostrap samples
     utilities_given_hyperparam = []
-    for i in range(strategy.n_bootstrap_samples):
+    for i in range(local_strategy.n_bootstrap_samples):
         utilities_given_hyperparam.append(i)
 
     return (torch.tensor(utilities_given_hyperparam))
@@ -106,19 +116,23 @@ if __name__ == "__main__":
                                 utility=args.utility,
                                 functional=args.functional)
 
-    print("strategy initialized")
+    # Define the parameters for strategy initialization
+    strategy_params = {
+            'simulation_start': None,  # or your actual value
+            'vol_target': 0.2,
+            'bar_name': "Close",
+            'boot_method': "cbb",  # or your actual value
+            'Bsize': 100,  # or your actual value
+            'k': args.k,
+            'alpha': args.alpha,
+            'utility': args.utility,
+            'functional': args.functional
+    }
 
-    # strategy hyperparameters
     windows = range(30, 252 + 1, 1)
-
-    # define multiprocessing pool``
-    utilities = []
+    parameters_list = [{'strategy_params': strategy_params, 'window': w} for w in windows]
 
     with multiprocessing.Pool(processes=args.cpu_count) as pool:
-
-        # define parameters list for the objective
-        parameters_list = [{'strategy': copy.deepcopy(strategy), 'window': w} for w in windows]
-
         utilities = pool.map(objective, parameters_list)
         
 
