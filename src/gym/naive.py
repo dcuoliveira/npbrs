@@ -47,7 +47,23 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
         self.bars_info = inputs["bars"]
 
+        # returns
+        self.returns_info = self.build_returns()
+
+        # carry
+        self.carry_info = None
+
         self.n_bootstrap_samples = k
+
+    def build_returns(self):
+        returns = []
+        for instrument in self.instruments:
+            tmp_return = np.log(self.bars_info[instrument][[self.bar_name]]).diff().dropna()
+            returns.append(tmp_return.rename(columns={self.bar_name: f"{instrument}_returns"}))
+
+        returns_df = pd.concat(returns, axis=1)
+            
+        return returns_df
     
 def objective(params):
     # Extract the strategy and window from params
