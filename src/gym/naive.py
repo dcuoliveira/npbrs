@@ -28,8 +28,22 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                  alpha: float=0.95,
                  utility: str="Sharpe",
                  functional: str="means") -> None:
-        self.n_bootstrap_samples = k
+        Functionals.__init__(self, alpha=alpha)
+    
+        # init strategy attributes
+        self.sysname = "training_etfstsm"
+        self.instruments = [
+        
+            'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
+            'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
+            'XLE', 'VIX', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
+        
+        ]
+        self.simulation_start = simulation_start
+        self.vol_target = vol_target
+        self.bar_name = bar_name
 
+        self.n_bootstrap_samples = k
     
 def objective(params):
     # Extract the strategy and window from params
