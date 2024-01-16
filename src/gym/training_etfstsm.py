@@ -159,35 +159,48 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             return bootrap_forecasts
     
 def objective(params):
-    strategy = params["strategy"]
-    window = params["window"]
+    strategy_params = params['strategy_params']
+    window = params['window']
+
+    # Initialize strategy within each process
+    local_strategy = training_etfstsm(
+        simulation_start=strategy_params['simulation_start'],
+        vol_target=strategy_params['vol_target'],
+        bar_name=strategy_params['bar_name'],
+        boot_method=strategy_params['boot_method'],
+        Bsize=strategy_params['Bsize'],
+        k=strategy_params['k'],
+        alpha=strategy_params['alpha'],
+        utility=strategy_params['utility'],
+        functional=strategy_params['functional']
+    )
 
     # for a given window, build signals from bootstrap samples
-    strategy.bootstrap_signals_info = strategy.build_signals_from_bootstrap_samples(window=window)
+    local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
 
     # build forecasts from bootstrap signals
-    strategy.bootstrap_forecasts_info = strategy.build_forecasts_from_bootstrap_signals()
+    local_strategy.bootstrap_forecasts_info = local_strategy.build_forecasts_from_bootstrap_signals()
 
     # run backtest for each boostrap samples
     utilities_given_hyperparam = []
-    for i in range(strategy.n_bootstrap_samples):
+    for i in range(local_strategy.n_bootstrap_samples):
         # build signals info
-        strategy.signals_info = strategy.bootstrap_signals_info[f"bootstrap_{i}"]
+        local_strategy.signals_info = local_strategy.bootstrap_signals_info[f"bootstrap_{i}"]
 
         # build forecasts info
-        strategy.forecasts_info = strategy.bootstrap_forecasts_info[f"bootstrap_{i}"]
+        local_strategy.forecasts_info = local_strategy.bootstrap_forecasts_info[f"bootstrap_{i}"]
 
         # run backtest
-        cerebro = Backtest(strat_metadata=strategy)
-        cerebro.run_backtest(instruments=strategy.instruments,
-                                bar_name=strategy.bar_name,
+        cerebro = Backtest(strat_metadata=local_strategy)
+        cerebro.run_backtest(instruments=local_strategy.instruments,
+                                bar_name=local_strategy.bar_name,
                                 vol_window=252,
-                                vol_target=strategy.vol_target,
+                                vol_target=local_strategy.vol_target,
                                 resample_freq="B")
         
         # compute strategy performance
         metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
-        utilities_given_hyperparam.append(metrics[strategy.utility])
+        utilities_given_hyperparam.append(metrics[local_strategy.utility])
 
     return (torch.tensor(utilities_given_hyperparam))
 
@@ -206,7 +219,37 @@ if __name__ == "__main__":
     if args.cpu_count == -1:
         args.cpu_count = multiprocessing.cpu_count() - 1
 
-    # strategy inputs
+    # strategy hyperparameters
+    windows = range(30, 252 + 1, 1)
+
+    # define the parameters for strategy initialization
+    strategy_params = {
+            'simulation_start': None,
+            'vol_target': 0.2,
+            'bar_name': "Close",
+            'boot_method': "cbb",  # or your actual value
+            'Bsize': 100,  # or your actual value
+            'k': args.k,
+            'alpha': args.alpha,
+            'utility': args.utility,
+            'functional': args.functional
+    }
+
+    # define parameters list for multiprocessing
+    windows = range(30, 252 + 1, 1)
+    parameters_list = [
+        {
+            'strategy_params': strategy_params,
+            'window': w
+        } for w in windows
+    ]
+
+    # define multiprocessing pool
+    utilities = []
+    with multiprocessing.Pool(processes=args.cpu_count) as pool:
+        utilities = pool.map(objective, parameters_list)
+
+    # final strategy inputs
     strategy = training_etfstsm(simulation_start=None,
                                 vol_target=0.2,
                                 bar_name="Close",
@@ -214,19 +257,6 @@ if __name__ == "__main__":
                                 alpha=args.alpha,
                                 utility=args.utility,
                                 functional=args.functional)
-
-    # strategy hyperparameters
-    windows = range(30, 252 + 1, 1)
-
-    # define multiprocessing pool
-    utilities = []
-
-    with multiprocessing.Pool(processes=args.cpu_count) as pool:
-
-        # define parameters list for the objective
-        parameters_list = [{'strategy': copy.deepcopy(strategy), 'window': w} for w in windows]
-
-        utilities = pool.map(objective,parameters_list)
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
