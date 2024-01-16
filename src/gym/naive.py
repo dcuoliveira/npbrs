@@ -43,6 +43,10 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         self.vol_target = vol_target
         self.bar_name = bar_name
 
+        # inputs
+        inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
+        self.bars_info = inputs["bars"]
+
         self.n_bootstrap_samples = k
     
 def objective(params):
