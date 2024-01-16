@@ -226,8 +226,8 @@ if __name__ == "__main__":
             'simulation_start': None,
             'vol_target': 0.2,
             'bar_name': "Close",
-            'boot_method': "cbb",  # or your actual value
-            'Bsize': 100,  # or your actual value
+            'boot_method': "cbb",
+            'Bsize': 100,
             'k': args.k,
             'alpha': args.alpha,
             'utility': args.utility,
@@ -249,13 +249,13 @@ if __name__ == "__main__":
         utilities = pool.map(objective, parameters_list)
 
     # final strategy inputs
-    strategy = training_etfstsm(simulation_start=None,
-                                vol_target=0.2,
-                                bar_name="Close",
-                                k=args.k,
-                                alpha=args.alpha,
-                                utility=args.utility,
-                                functional=args.functional)
+    strategy = training_etfstsm(simulation_start=strategy_params['simulation_start'],
+                                vol_target=strategy_params['vol_target'],
+                                bar_name=strategy_params['bar_name'],
+                                k=strategy_params['k'],
+                                alpha=strategy_params['alpha'],
+                                utility=strategy_params['utility'],
+                                functional=strategy_params['functional'])
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
