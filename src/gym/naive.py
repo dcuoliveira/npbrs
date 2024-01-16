@@ -52,8 +52,14 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
 
         # carry
         self.carry_info = None
-
-        self.n_bootstrap_samples = k
+        
+        # generate bootstrap samples from returns
+        DependentBootstrapSampling.__init__(self,
+                                            time_series=torch.tensor(self.returns_info.to_numpy()),
+                                            boot_method=boot_method,
+                                            Bsize=Bsize)
+        self.all_samples = self.sample_many_paths(k=k)
+        self.n_bootstrap_samples = self.all_samples.shape[0]
 
     def build_returns(self):
         returns = []
