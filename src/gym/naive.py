@@ -70,6 +70,9 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         # utilities
         self.utility = utility
 
+    def build_returns(self):
+        return None
+
     
 def objective(params):
     # Extract the strategy and window from params
