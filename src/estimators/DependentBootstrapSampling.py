@@ -202,12 +202,13 @@ class DependentBootstrapSampling:
 
         N = self.time_series.shape[0]
         dtime_series = torch.vstack([self.time_series.clone().detach(),self.time_series[:self.Bsize,:].clone().detach()])
+        dtime_series.share_memory_()  # Make the whole doubled time series shared in memory
 
         Block_sets = list()
         for i in range(N):
             j = i + self.Bsize
             Block = dtime_series[i:j,:]
-            Block_sets.append(None)
+            Block_sets.append(Block)
         
         return Block_sets
     
