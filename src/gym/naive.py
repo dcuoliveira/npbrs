@@ -71,7 +71,14 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         self.utility = utility
 
     def build_returns(self):
-        return None
+        returns = []
+        for instrument in self.instruments:
+            tmp_return = np.log(self.bars_info[instrument][[self.bar_name]]).diff().dropna()
+            returns.append(tmp_return.rename(columns={self.bar_name: f"{instrument}_returns"}))
+
+        returns_df = pd.concat(returns, axis=1)
+            
+        return returns_df
 
     
 def objective(params):
