@@ -28,57 +28,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                  alpha: float=0.95,
                  utility: str="Sharpe",
                  functional: str="means") -> None:
-        Functionals.__init__(self, alpha=alpha)
-    
-        # init strategy attributes
-        self.sysname = "training_etfstsm"
-        self.instruments = [
-        
-            'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
-            'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
-            'XLE', 'VIX', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
-        
-        ]
-        self.simulation_start = simulation_start
-        self.vol_target = vol_target
-        self.bar_name = bar_name
-
-        # inputs
-        inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
-        self.bars_info = inputs["bars"]
-
-        # returns
-        self.returns_info = self.build_returns()
-
-        # carry
-        self.carry_info = None
-
-        # generate bootstrap samples from returns
-        DependentBootstrapSampling.__init__(self,
-                                            time_series=torch.tensor(self.returns_info.to_numpy()),
-                                            boot_method=boot_method,
-                                            Bsize=Bsize)
-        self.all_samples = self.sample_many_paths(k=k)
-        self.n_bootstrap_samples = self.all_samples.shape[0]
-
-        # generate signals from bootstrap samples
-        self.bootstrap_signals_info = None
-        
-        # generate forecasts from from bootstrap signals
-        self.bootstrap_forecasts_info = None
-
-        # utilities
-        self.utility = utility
-
-    def build_returns(self):
-        returns = []
-        for instrument in self.instruments:
-            tmp_return = np.log(self.bars_info[instrument][[self.bar_name]]).diff().dropna()
-            returns.append(tmp_return.rename(columns={self.bar_name: f"{instrument}_returns"}))
-
-        returns_df = pd.concat(returns, axis=1)
-            
-        return returns_df
+        self.n_bootstrap_samples = k
 
     
 def objective(params):
