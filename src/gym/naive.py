@@ -72,17 +72,20 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         return returns_df
     
 def objective(params):
+    strategy_params = params['strategy_params']
+    window = params['window']
+
     # Initialize strategy within each process
     local_strategy = training_etfstsm(
-        simulation_start=params['simulation_start'],
-        vol_target=params['vol_target'],
-        bar_name=params['bar_name'],
-        boot_method=params['boot_method'],
-        Bsize=params['Bsize'],
-        k=params['k'],
-        alpha=params['alpha'],
-        utility=params['utility'],
-        functional=params['functional']
+        simulation_start=strategy_params['simulation_start'],
+        vol_target=strategy_params['vol_target'],
+        bar_name=strategy_params['bar_name'],
+        boot_method=strategy_params['boot_method'],
+        Bsize=strategy_params['Bsize'],
+        k=strategy_params['k'],
+        alpha=strategy_params['alpha'],
+        utility=strategy_params['utility'],
+        functional=strategy_params['functional']
     )
 
     # run backtest for each boostrap samples
@@ -118,7 +121,7 @@ if __name__ == "__main__":
 
     # Define the parameters for strategy initialization
     strategy_params = {
-            'simulation_start': None,  # or your actual value
+            'simulation_start': None,
             'vol_target': 0.2,
             'bar_name': "Close",
             'boot_method': "cbb",  # or your actual value
@@ -130,8 +133,13 @@ if __name__ == "__main__":
     }
 
     windows = range(30, 252 + 1, 1)
-    parameters_list = [{'strategy_params': strategy_params, 'window': w} for w in windows]
-
+    parameters_list = [
+        {
+            'strategy_params': strategy_params,
+            'window': w
+        } for w in windows
+    ]
+    
     with multiprocessing.Pool(processes=args.cpu_count) as pool:
         utilities = pool.map(objective, parameters_list)
         
