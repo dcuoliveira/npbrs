@@ -39,10 +39,10 @@ class DependentBootstrapSampling:
         self.Model = None # list of ARIMA models, only used when "boot_method" is "rbb".
         self.residuals = None # np.array of errors, only used when "boot_method" is "rbb".
         self.P = None # best order parameter (P) of VAR model corresponding to each model
-        if self.boot_method != "rbb": # if not "rbb" then it is model based
-            self.create_blocks()
-        else:
-            self.create_VAR_model(max_p = max_p)
+        # if self.boot_method != "rbb": # if not "rbb" then it is model based
+        #     self.create_blocks()
+        # else:
+        #     self.create_VAR_model(max_p = max_p)
 
     def sample_many_paths(self, k: int) -> torch.Tensor:
         """
