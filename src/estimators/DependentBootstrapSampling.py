@@ -206,7 +206,7 @@ class DependentBootstrapSampling:
         Block_sets = list()
         for i in range(N):
             j = i + self.Bsize
-            Block_sets.append(dtime_series[i:j,:].clone().detach())
+            Block_sets.append(dtime_series[i:j,:].clone())
         
         return Block_sets
     
