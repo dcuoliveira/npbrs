@@ -106,6 +106,8 @@ if __name__ == "__main__":
                                 utility=args.utility,
                                 functional=args.functional)
 
+    print("strategy initialized")
+
     # strategy hyperparameters
     windows = range(30, 252 + 1, 1)
 
