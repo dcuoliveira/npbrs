@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 import torch
 import multiprocessing
-import copy
 import argparse
 
 from settings import INPUT_PATH, OUTPUT_PATH
