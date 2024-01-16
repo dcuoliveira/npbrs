@@ -201,16 +201,15 @@ class DependentBootstrapSampling:
         """
 
         N = self.time_series.shape[0]
-        # dtime_series = torch.vstack([self.time_series.clone().detach(),self.time_series[:self.Bsize,:].clone().detach()])
-        dtime_series = torch.vstack([self.time_series,self.time_series[:self.Bsize,:]])
+        dtime_series = torch.vstack([self.time_series.clone().detach(),self.time_series[:self.Bsize,:].clone().detach()])
 
-        Block_sets = list()
-        for i in range(N):
-            j = i + self.Bsize
-            Block = dtime_series[i:j,:]
-            Block_sets.append(Block)
+        # Block_sets = list()
+        # for i in range(N):
+        #     j = i + self.Bsize
+        #     Block = dtime_series[i:j,:]
+        #     Block_sets.append(Block)
         
-        return Block_sets
+        return None
     
     # TODO: solve problem when the best parameters are (0,0,0) -> which means that is completely random
     def create_VAR_model(self,
