@@ -30,7 +30,7 @@ class Backtest(Diagnostics):
             tmp_bars = self.bars[inst][[bar_name]].resample(resample_freq).last().ffill()
 
             tmp_rets = np.log(tmp_bars).diff()
-            tmp_vols = tmp_rets.rolling(window=vol_window).std() * np.sqrt(252)
+            tmp_vols = tmp_rets.rolling(window=vol_window).std()
 
             tmp_signals = self.signals[inst].resample(resample_freq).last().ffill()
             tmp_forecasts = self.forecasts[inst].resample(resample_freq).last().ffill()
@@ -75,11 +75,11 @@ class Backtest(Diagnostics):
         self.portfolio_returns = (self.forecasts_df * self.rets_df.shift(-1)).fillna(0)
 
         # compute scaled portfolio returns
-        self.scaled_portfolio_returns = vol_scale * self.portfolio_returns
+        self.scaled_portfolio_returns = (vol_scale / np.sqrt(252)) * self.portfolio_returns
 
         # aggregate portfolio returns
-        self.agg_portfolio_returns = pd.DataFrame(self.portfolio_returns.sum(axis=1), columns=["portfolio_returns"])
-        self.agg_scaled_portfolio_returns = pd.DataFrame(self.scaled_portfolio_returns.sum(axis=1), columns=["portfolio_returns"])
+        self.agg_portfolio_returns = pd.DataFrame(self.portfolio_returns.mean(axis=1), columns=["portfolio_returns"])
+        self.agg_scaled_portfolio_returns = pd.DataFrame(self.scaled_portfolio_returns.mean(axis=1), columns=["portfolio_returns"])
 
 
         
