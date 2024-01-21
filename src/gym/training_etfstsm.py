@@ -211,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
     parser.add_argument('--alpha', type=float, help='Confidence level for the rank of the estimates.', default=0.95)
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
-    parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=-1)
+    parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
 
     args = parser.parse_args()
 
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     # define the parameters for strategy initialization
     strategy_params = {
             'simulation_start': None,
-            'vol_target': 0.2,
+            'vol_target': 0.15,
             'bar_name': "Close",
             'boot_method': "cbb",
             'Bsize': 100,
@@ -278,7 +278,7 @@ if __name__ == "__main__":
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(instruments=strategy.instruments,
                          bar_name=strategy.bar_name,
-                         vol_window=252,
+                         vol_window=90,
                          vol_target=strategy.vol_target,
                          resample_freq="B")
     
