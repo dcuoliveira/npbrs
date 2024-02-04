@@ -17,7 +17,7 @@ class Diagnostics:
                                    portfolio_returns: pd.DataFrame,
                                    default_metrics: list = [ExpectedRet, Volatility, Sharpe, Sortino, AverageDD, MaxDD, PositiveRetRatio]):
         
-        torch_portfolio_returns = torch.tensor(portfolio_returns.values)
+        torch_portfolio_returns = torch.tensor(portfolio_returns.dropna().values)
 
         portfolio_stats = {}
         for metric in default_metrics:
