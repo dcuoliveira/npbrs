@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
+    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="AverageDD")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
     parser.add_argument('--alpha', type=float, help='Confidence level for the rank of the estimates.', default=0.95)
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=100)
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     }
 
     # define parameters list for multiprocessing
-    windows = range(30, 35) # range(30, 252 + 1, 1)
+    windows = range(30, 252 + 1, 1)
     parameters_list = [
         {
             'strategy_params': strategy_params,
