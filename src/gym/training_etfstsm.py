@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="AverageDD")
+    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="AvgDD")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
     parser.add_argument('--alpha', type=float, help='Confidence level for the rank of the estimates.', default=0.95)
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=100)
