@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="AvgDD")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
-    parser.add_argument('--alpha', type=float, help='Confidence level for the rank of the estimates.', default=0.95)
+    parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=0.95)
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=100)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
 
@@ -253,7 +253,8 @@ if __name__ == "__main__":
                                 alpha=strategy_params['alpha'],
                                 utility=strategy_params['utility'],
                                 functional=strategy_params['functional'])
-        
+    
+    
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
 
@@ -274,22 +275,22 @@ if __name__ == "__main__":
     strategy.forecasts_info = strategy.build_forecasts()
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(instruments=strategy.instruments,
-                         bar_name=strategy.bar_name,
-                         vol_window=90,
-                         vol_target=strategy.vol_target,
-                         resample_freq="B")
+                        bar_name=strategy.bar_name,
+                        vol_window=90,
+                        vol_target=strategy.vol_target,
+                        resample_freq="B")
     
     results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
 
     save_strat_opt_results(results_path=results_path,
-                           args=args,
-                           cerebro=cerebro,
-                           strategy=strategy)
+                        args=args,
+                        cerebro=cerebro,
+                        strategy=strategy)
 
 
+
+    
 
         
-
-            
 
 
