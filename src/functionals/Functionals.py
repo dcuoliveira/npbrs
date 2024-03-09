@@ -93,6 +93,24 @@ class Functionals:
         x_selected = scores_estimates.iloc[percentile_idx]['estimates']
 
         return x_selected
+    
+    def maximum(self, x: torch.tensor, scores: torch.tensor) -> float:
+        """
+        This function computes the maximum of a given vector.
+
+        Args:
+            x (torch.tensor): input vector.
+        Returns:
+            float: maximum of x.
+        """
+
+        if len(x) == 1:
+            return x[0]
+
+        scores_estimates = pd.DataFrame({"score": scores, "estimates": x}).sort_values(by="score", ascending=True).reset_index(drop=True)
+        x_selected = scores_estimates.iloc[-1]['estimates']
+
+        return x_selected
 
     def apply_functional(self, x: torch.tensor, func: str="eigenvalues") -> torch.tensor:
         """
@@ -114,7 +132,10 @@ class Functionals:
         else:
             raise ValueError("Functional not implemented.")
 
-        x_selected = self.percentile(x, self.scores, alpha=self.alpha)
+        if self.alpha == -1:
+            x_selected = self.percentile(x, self.scores, alpha=self.alpha)
+        else:
+            x_selected = self.percentile(x, self.scores, alpha=self.alpha)
         
         return x_selected
     
