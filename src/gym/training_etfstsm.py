@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import multiprocessing
 import argparse
+import copy
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
@@ -18,7 +19,6 @@ from utils.conn_data import load_pickle, save_strat_opt_results
 
 class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
-                 simulation_start: str,
                  vol_target: float,
                  bar_name: str,
                  boot_method: str = "cbb",
@@ -33,8 +33,6 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
 
         Parameters
         ----------
-        simulation_start : str
-            The date from which to start the simulation.
         vol_target : float
             The target volatility of the strategy.
         bar_name : str
@@ -69,7 +67,6 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             'XLE', 'VIX', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
         
         ]
-        self.simulation_start = simulation_start
         self.vol_target = vol_target
         self.bar_name = bar_name
 
@@ -163,7 +160,6 @@ def objective(params):
 
     # Initialize strategy within each process
     local_strategy = training_etfstsm(
-        simulation_start=strategy_params['simulation_start'],
         vol_target=strategy_params['vol_target'],
         bar_name=strategy_params['bar_name'],
         boot_method=strategy_params['boot_method'],
@@ -191,11 +187,13 @@ def objective(params):
 
         # run backtest
         cerebro = Backtest(strat_metadata=local_strategy)
-        cerebro.run_backtest(instruments=local_strategy.instruments,
-                                bar_name=local_strategy.bar_name,
-                                vol_window=252,
-                                vol_target=local_strategy.vol_target,
-                                resample_freq="B")
+        cerebro.run_backtest(start_date=strategy_params['start_date'],
+                             end_date=strategy_params['end_date'],
+                             instruments=local_strategy.instruments,
+                             bar_name=local_strategy.bar_name,
+                             vol_window=252,
+                             vol_target=local_strategy.vol_target,
+                             resample_freq="B")
         
         # compute strategy performance
         metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
@@ -209,9 +207,11 @@ if __name__ == "__main__":
 
     parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="AvgDD")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
-    parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=0.95)
-    parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=100)
+    parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=1) # -1 = minimum, 1 = maximum
+    parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
+    parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
+    parser.add_argument('--end_date', type=str, help='End date for the strategy.', default="2015-12-31")
 
     args = parser.parse_args()
 
@@ -220,7 +220,8 @@ if __name__ == "__main__":
 
     # define the parameters for strategy initialization
     strategy_params = {
-            'simulation_start': None,
+            'start_date': args.start_date,
+            'end_date': args.end_date,
             'vol_target': 0.15,
             'bar_name': "Close",
             'boot_method': "cbb",
@@ -246,8 +247,7 @@ if __name__ == "__main__":
         utilities = pool.map(objective, parameters_list)
 
     # final strategy inputs
-    strategy = training_etfstsm(simulation_start=strategy_params['simulation_start'],
-                                vol_target=strategy_params['vol_target'],
+    strategy = training_etfstsm(vol_target=strategy_params['vol_target'],
                                 bar_name=strategy_params['bar_name'],
                                 k=strategy_params['k'],
                                 alpha=strategy_params['alpha'],
@@ -269,22 +269,46 @@ if __name__ == "__main__":
     strategy.final_utility = final_utility
     strategy.robust_parameter = robust_parameter
 
-    # run strategy with robust parameter
+    # results path
+    results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
+
+    # run strategy with robust parameter IN-SAMPLE
     strategy.signals_info = strategy.build_signals(window=robust_parameter)
     strategy.forecasts_info = strategy.build_forecasts()
     cerebro = Backtest(strat_metadata=strategy)
-    cerebro.run_backtest(instruments=strategy.instruments,
-                        bar_name=strategy.bar_name,
-                        vol_window=90,
-                        vol_target=strategy.vol_target,
-                        resample_freq="B")
+    cerebro.run_backtest(start_date=args.start_date,
+                         end_date=args.end_date,
+                         instruments=strategy.instruments,
+                         bar_name=strategy.bar_name,
+                         vol_window=90,
+                         vol_target=strategy.vol_target,
+                         resample_freq="B")
     
-    results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
-
+    train_cerebro = copy.deepcopy(cerebro)
     save_strat_opt_results(results_path=results_path,
-                        args=args,
-                        cerebro=cerebro,
-                        strategy=strategy)
+                           args=args,
+                           cerebro=train_cerebro,
+                           strategy=strategy,
+                           train=True)
+     
+    # run strategy with robust parameter OUT-OF-SAMPLE
+    strategy.signals_info = strategy.build_signals(window=robust_parameter)
+    strategy.forecasts_info = strategy.build_forecasts()
+    cerebro = Backtest(strat_metadata=strategy)
+    cerebro.run_backtest(start_date=args.end_date,
+                         end_date=None,
+                         instruments=strategy.instruments,
+                         bar_name=strategy.bar_name,
+                         vol_window=90,
+                         vol_target=strategy.vol_target,
+                         resample_freq="B")
+    
+    test_cerebro = copy.deepcopy(cerebro)   
+    save_strat_opt_results(results_path=results_path,
+                           args=args,
+                           cerebro=test_cerebro,
+                           strategy=strategy,
+                           train=False)
 
 
 
