@@ -87,7 +87,7 @@ class Functionals:
 
         # n is typically the numbre of bootstrap samples
         n = len(x)
-        percentile_idx = int((1 - alpha) * n)
+        percentile_idx = int(alpha * n) - 1
 
         scores_estimates = pd.DataFrame({"score": scores, "estimates": x}).sort_values(by="score", ascending=True).reset_index(drop=True)
         x_selected = scores_estimates.iloc[percentile_idx]['estimates']
