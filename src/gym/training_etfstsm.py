@@ -253,8 +253,7 @@ if __name__ == "__main__":
                                 alpha=strategy_params['alpha'],
                                 utility=strategy_params['utility'],
                                 functional=strategy_params['functional'])
-    
-    
+        
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
 
