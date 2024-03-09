@@ -11,7 +11,28 @@ from loss_functions.PositiveRetRatio import PositiveRetRatio
 
 class Diagnostics:
     def __init__(self) -> None:
-        pass
+        self.str_to_metric = {
+            'ExpectedRet': ExpectedRet,
+            'Volatility': Volatility,
+            'Sharpe': Sharpe,
+            'Sortino': Sortino,
+            'AvgDD': AverageDD,
+            'MaxDD': MaxDD,
+            '% Positive Ret.': PositiveRetRatio
+        }
+
+    def compute_metric(self,
+                       portoflio_returns: pd.DataFrame,
+                       metric_name: str):
+        
+        torch_portfolio_returns = torch.tensor(portoflio_returns.dropna().values)
+        
+        metric = self.str_to_metric[metric_name]
+        metric = metric()
+
+        portfolio_stat = metric.forward(returns=torch_portfolio_returns).item()
+
+        return portfolio_stat
 
     def compute_summary_statistics(self,
                                    portfolio_returns: pd.DataFrame,
