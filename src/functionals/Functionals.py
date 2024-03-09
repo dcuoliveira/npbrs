@@ -111,6 +111,24 @@ class Functionals:
         x_selected = scores_estimates.iloc[-1]['estimates']
 
         return x_selected
+    
+    def minimum(self, x: torch.tensor, scores: torch.tensor) -> float:
+        """
+        This function computes the minimum of a given vector.
+
+        Args:
+            x (torch.tensor): input vector.
+        Returns:
+            float: minimum of x.
+        """
+
+        if len(x) == 1:
+            return x[0]
+
+        scores_estimates = pd.DataFrame({"score": scores, "estimates": x}).sort_values(by="score", ascending=True).reset_index(drop=True)
+        x_selected = scores_estimates.iloc[0]['estimates']
+
+        return x_selected
 
     def apply_functional(self, x: torch.tensor, func: str="eigenvalues") -> torch.tensor:
         """
@@ -133,7 +151,9 @@ class Functionals:
             raise ValueError("Functional not implemented.")
 
         if self.alpha == -1:
-            x_selected = self.percentile(x, self.scores, alpha=self.alpha)
+            x_selected = self.minimum(x, self.scores)
+        elif self.alpha == 1:
+            x_selected = self.maximum(x, self.scores)
         else:
             x_selected = self.percentile(x, self.scores, alpha=self.alpha)
         
