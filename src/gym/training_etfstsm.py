@@ -309,6 +309,8 @@ if __name__ == "__main__":
                            cerebro=test_cerebro,
                            strategy=strategy,
                            train=False)
+    
+    print(f"Optimization results saved in {results_path}")
 
 
 
