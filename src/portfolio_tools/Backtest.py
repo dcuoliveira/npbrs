@@ -15,6 +15,8 @@ class Backtest(Diagnostics):
         self.carry = strat_metadata.carry_info
 
     def standardize_inputs(self,
+                           start_date: str,
+                           end_date: str,
                            instruments,
                            bar_name: str,
                            vol_window: int,
@@ -41,12 +43,12 @@ class Backtest(Diagnostics):
             else:
                 tmp_carry = self.carry[inst][[bar_name]].resample(resample_freq).last().ffill()
 
-            bars_list.append(tmp_bars.rename(columns={bar_name: inst}))
-            vols_list.append(tmp_vols.rename(columns={bar_name: inst}))
-            rets_list.append(tmp_rets.rename(columns={bar_name: inst}))
-            carrys_list.append(tmp_carry.rename(columns={bar_name: inst}))
-            signals_list.append(tmp_signals.rename(columns={bar_name: inst}))
-            forecasts_list.append(tmp_forecasts.rename(columns={bar_name: inst}))
+            bars_list.append(tmp_bars.loc[start_date:end_date].rename(columns={bar_name: inst}))
+            vols_list.append(tmp_vols.loc[start_date:end_date].rename(columns={bar_name: inst}))
+            rets_list.append(tmp_rets.loc[start_date:end_date].rename(columns={bar_name: inst}))
+            carrys_list.append(tmp_carry.loc[start_date:end_date].rename(columns={bar_name: inst}))
+            signals_list.append(tmp_signals.loc[start_date:end_date].rename(columns={bar_name: inst}))
+            forecasts_list.append(tmp_forecasts.loc[start_date:end_date].rename(columns={bar_name: inst}))
 
         self.bars_df = pd.concat(bars_list, axis=1)
         self.vols_df = pd.concat(vols_list, axis=1)
@@ -60,10 +62,14 @@ class Backtest(Diagnostics):
                      bar_name: str,
                      vol_window: int,
                      vol_target: float,
-                     resample_freq: str):
+                     resample_freq: str,
+                     start_date: str,
+                     end_date: str,):
 
         # standardize dict inputs
-        self.standardize_inputs(instruments=instruments,
+        self.standardize_inputs(start_date=start_date,
+                                end_date=end_date,
+                                instruments=instruments,
                                 bar_name=bar_name,
                                 vol_window=vol_window,
                                 resample_freq=resample_freq)
