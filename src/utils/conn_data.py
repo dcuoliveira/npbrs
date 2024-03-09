@@ -105,7 +105,7 @@ def load_pickle(path: str):
 
     return target_dict
 
-def save_strat_opt_results(results_path: str, args: dict, cerebro: object, strategy: object):
+def save_strat_opt_results(results_path: str, args: dict, cerebro: object, strategy: object, train: bool = True):
 
     # check if path exists
     if not os.path.exists(results_path):
@@ -132,6 +132,7 @@ def save_strat_opt_results(results_path: str, args: dict, cerebro: object, strat
     }
     
     # save results
-    save_pickle(path=os.path.join(results_path, "args.pickle"), obj=args)
-    save_pickle(path=os.path.join(results_path, "portfolio_results.pickle"), obj=portfolio_results)
-    save_pickle(path=os.path.join(results_path, "opt_results.pickle"), obj=opt_results)
+    train_test_tag = 'train' if train else 'test'
+    save_pickle(path=os.path.join(results_path, f"{train_test_tag}_args.pickle"), obj=args)
+    save_pickle(path=os.path.join(results_path, f"{train_test_tag}_portfolio_results.pickle"), obj=portfolio_results)
+    save_pickle(path=os.path.join(results_path, f"{train_test_tag}_opt_results.pickle"), obj=opt_results)
