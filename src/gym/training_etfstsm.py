@@ -26,7 +26,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                  k: int = 100,
                  alpha: float=0.95,
                  utility: str="Sharpe",
-                 functional: str="means") -> None:
+                 seed: int=None) -> None:
         """
         This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
         It is used to train the ETF TSM strategy.
@@ -47,8 +47,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             The percentile to use for the functional. The default is 0.95.
         utility : str, optional
             The utility function to use. The default is "Sharpe".
-        functional : str, optional
-            The functional to use. The default is "means".
+        seed : int, optional
+            The seed to use for the random number generator. The default is None.
 
         Returns
         -------
@@ -84,7 +84,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         DependentBootstrapSampling.__init__(self,
                                             time_series=torch.tensor(self.returns_info.to_numpy()),
                                             boot_method=boot_method,
-                                            Bsize=Bsize)
+                                            Bsize=Bsize,
+                                            seed=seed)
         self.all_samples = self.sample_many_paths(k=k)
         self.n_bootstrap_samples = self.all_samples.shape[0]
 
@@ -212,6 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
     parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
     parser.add_argument('--end_date', type=str, help='End date for the strategy.', default="2015-12-31")
+    parser.add_argument('--seed', type=int, help='Seed for the random number generator.', default=2294)
 
     args = parser.parse_args()
 
