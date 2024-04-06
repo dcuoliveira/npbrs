@@ -167,9 +167,7 @@ def objective(params):
         Bsize=strategy_params['Bsize'],
         k=strategy_params['k'],
         alpha=strategy_params['alpha'],
-        utility=strategy_params['utility'],
-        functional=strategy_params['functional']
-    )
+        utility=strategy_params['utility'])
 
     # for a given window, build signals from bootstrap samples
     local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
@@ -253,8 +251,7 @@ if __name__ == "__main__":
                                 bar_name=strategy_params['bar_name'],
                                 k=strategy_params['k'],
                                 alpha=strategy_params['alpha'],
-                                utility=strategy_params['utility'],
-                                functional=strategy_params['functional'])
+                                utility=strategy_params['utility'])
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
