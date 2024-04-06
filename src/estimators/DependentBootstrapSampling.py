@@ -12,7 +12,8 @@ class DependentBootstrapSampling:
                  time_series: torch.Tensor,
                  boot_method: str = "cbb",
                  Bsize: int = 100,
-                 max_p: int = 4) -> None:
+                 max_p: int = 4,
+                 seed: int=None) -> None:
         """
         This class contains the different ways to generate dependent bootstrap samples.
 
@@ -23,6 +24,7 @@ class DependentBootstrapSampling:
         - Model-based / Residual-based Bootstrap (rbb)
 
         Args:
+            seed (int): seed to generate random numbers.
             time_series (torch.Tensor): time series array
             boot_method (str): bootstrap method name to build the block set. For example, "cbb".
             Bsize (int): block size to create the block set.
@@ -39,6 +41,8 @@ class DependentBootstrapSampling:
         self.Model = None # list of ARIMA models, only used when "boot_method" is "rbb".
         self.residuals = None # np.array of errors, only used when "boot_method" is "rbb".
         self.P = None # best order parameter (P) of VAR model corresponding to each model
+        self.seed = seed
+
         if self.boot_method != "rbb": # if not "rbb" then it is model based
             self.create_blocks()
         else:
@@ -75,6 +79,7 @@ class DependentBootstrapSampling:
         Returns:
             sampled_data (torch.Tensor): sampled data
         """
+        random.seed(self.seed)
         
         if self.boot_method == "cbb":
 
