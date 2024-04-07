@@ -13,7 +13,7 @@ class DependentBootstrapSampling:
                  boot_method: str = "cbb",
                  Bsize: int = 100,
                  max_p: int = 4,
-                 seed: int=None) -> None:
+                 use_seed: bool=True) -> None:
         """
         This class contains the different ways to generate dependent bootstrap samples.
 
@@ -24,7 +24,7 @@ class DependentBootstrapSampling:
         - Model-based / Residual-based Bootstrap (rbb)
 
         Args:
-            seed (int): seed to generate random numbers.
+            use_seed (bool): whether to use the seed or not.
             time_series (torch.Tensor): time series array
             boot_method (str): bootstrap method name to build the block set. For example, "cbb".
             Bsize (int): block size to create the block set.
@@ -41,7 +41,8 @@ class DependentBootstrapSampling:
         self.Model = None # list of ARIMA models, only used when "boot_method" is "rbb".
         self.residuals = None # np.array of errors, only used when "boot_method" is "rbb".
         self.P = None # best order parameter (P) of VAR model corresponding to each model
-        self.seed = seed
+        self.use_seed = use_seed
+        self.seeds = {}
 
         if self.boot_method != "rbb": # if not "rbb" then it is model based
             self.create_blocks()
@@ -59,11 +60,19 @@ class DependentBootstrapSampling:
         Returns:
             all_samples (torch.Tensor): all sampled data
         """
-
+        
+        seeds1 = []
         all_samples = []
         for i in range(k):
+
+            if self.use_seed:
+                random.seed(i)
+                seeds1.append(i)
+
             sampled_data = self.sample()
             all_samples.append(sampled_data)
+        
+        self.seeds['seeds1'] = seeds1
         
         return torch.stack(all_samples)
 
@@ -79,12 +88,12 @@ class DependentBootstrapSampling:
         Returns:
             sampled_data (torch.Tensor): sampled data
         """
-        random.seed(self.seed)
         
         if self.boot_method == "cbb":
 
             N = self.time_series.shape[0]
             b = int(math.ceil(N / self.Bsize))
+
             selected_blocks = random.choices(self.Blocks, k = b)
 
             sampled_data = torch.vstack(selected_blocks)
@@ -163,7 +172,7 @@ class DependentBootstrapSampling:
             i = 0
             while total < N:
 
-                # write me a line of code to generate a random integer number between 1 and N
+                # TODO - add seed here
                 I = random.randint(1, N)
                 L = np.random.geometric(p=0.5, size=1)[0]
 

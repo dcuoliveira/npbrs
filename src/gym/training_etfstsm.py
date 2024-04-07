@@ -26,7 +26,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                  k: int = 100,
                  alpha: float=0.95,
                  utility: str="Sharpe",
-                 seed: int=None) -> None:
+                 use_seed: bool=True) -> None:
         """
         This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
         It is used to train the ETF TSM strategy.
@@ -47,8 +47,8 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
             The percentile to use for the functional. The default is 0.95.
         utility : str, optional
             The utility function to use. The default is "Sharpe".
-        seed : int, optional
-            The seed to use for the random number generator. The default is None.
+        use_seed : int, optional
+            If to use seed on the bootstraps or not. The default is None.
 
         Returns
         -------
@@ -85,7 +85,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                                             time_series=torch.tensor(self.returns_info.to_numpy()),
                                             boot_method=boot_method,
                                             Bsize=Bsize,
-                                            seed=seed)
+                                            use_seed=use_seed)
         self.all_samples = self.sample_many_paths(k=k)
         self.n_bootstrap_samples = self.all_samples.shape[0]
 
@@ -167,7 +167,8 @@ def objective(params):
         Bsize=strategy_params['Bsize'],
         k=strategy_params['k'],
         alpha=strategy_params['alpha'],
-        utility=strategy_params['utility'])
+        utility=strategy_params['utility'],
+        use_seed=strategy_params['use_seed'])
 
     # for a given window, build signals from bootstrap samples
     local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
@@ -204,14 +205,14 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="AvgDD")
+    parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
     parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=1) # -1 = minimum, 1 = maximum
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
     parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
     parser.add_argument('--end_date', type=str, help='End date for the strategy.', default="2015-12-31")
-    parser.add_argument('--seed', type=int, help='Seed for the random number generator.', default=2294)
+    parser.add_argument('--use_seed', type=int, help='If to use seed on the bootstraps or not.', default=True)
 
     args = parser.parse_args()
 
@@ -229,11 +230,12 @@ if __name__ == "__main__":
             'k': args.k,
             'alpha': args.alpha,
             'utility': args.utility,
-            'functional': args.functional
+            'functional': args.functional,
+            'use_seed': args.use_seed
     }
 
     # define parameters list for multiprocessing
-    windows = range(30, 252 + 1, 1)
+    windows = range(30, 32) # 252 + 1, 1)
     parameters_list = [
         {
             'strategy_params': strategy_params,
@@ -251,7 +253,8 @@ if __name__ == "__main__":
                                 bar_name=strategy_params['bar_name'],
                                 k=strategy_params['k'],
                                 alpha=strategy_params['alpha'],
-                                utility=strategy_params['utility'])
+                                utility=strategy_params['utility'],
+                                use_seed=strategy_params['use_seed'])
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
