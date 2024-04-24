@@ -85,7 +85,7 @@ class RobustEWMA(RobustStrategicControl):
         for i in range(self.windows_size-1,-1,-1):
             sliding_window2[i] = i*sliding_window2[i]
         #
-        # computing derivative
+        # computing derivatives
         sliding_window2 = (1 - alpha)*sliding_window2
         EWMA_time_series = torch.Tensor(N - self.windows_size + 1,M)
         # compute cost
