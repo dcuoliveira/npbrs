@@ -66,8 +66,8 @@ class DependentBootstrapSampling:
         for i in range(k):
 
             if self.use_seed:
-                random.seed(i)
-                seeds1.append(i)
+                random.seed(i * 5)
+                seeds1.append(i * 5)
 
             sampled_data = self.sample()
             all_samples.append(sampled_data)
