@@ -108,10 +108,10 @@ class training_etfstsm_cta(TSM, DependentBootstrapSampling, Functionals):
             
         return returns_df
             
-    def build_signals(self, window: int):
+    def build_signals(self, short_term: list, long_term: list):
         signals = {}
         for instrument in self.instruments:
-            signal = self.Moskowitz(returns=self.returns_info[[f"{instrument}_returns"]], window=window)
+            signal = self.CTA(returns=self.returns_info[[f"{instrument}_returns"]], short_term=short_term, long_term=long_term)
             signals[instrument] = signal.rename(columns={f"{instrument}_returns": self.bar_name})
             
         return signals
@@ -127,13 +127,13 @@ class training_etfstsm_cta(TSM, DependentBootstrapSampling, Functionals):
             
         return forecasts
     
-    def build_signals_from_bootstrap_samples(self, window: int):
+    def build_signals_from_bootstrap_samples(self, short_term: list, long_term: list):
         bootrap_signals = {}
         for i in range(self.n_bootstrap_samples):
             signals = {}
             sample_df = pd.DataFrame(self.all_samples[i, :, :], columns=self.instruments, index=self.returns_info.index)
             for instrument in self.instruments:
-                signal = self.Moskowitz(returns=sample_df[[instrument]], window=window)
+                signal = self.CTA(returns=sample_df[[instrument]], short_term=short_term, long_term=long_term)
                 signals[instrument] = signal.rename(columns={instrument: self.bar_name})
             
             bootrap_signals[f"bootstrap_{i}"] = signals
@@ -157,7 +157,8 @@ class training_etfstsm_cta(TSM, DependentBootstrapSampling, Functionals):
     
 def objective(params):
     strategy_params = params['strategy_params']
-    window = params['window']
+    short_term = params['window'][0]
+    long_term = params['window'][1]
 
     # Initialize strategy within each process
     local_strategy = training_etfstsm_cta(
@@ -171,7 +172,7 @@ def objective(params):
         use_seed=strategy_params['use_seed'])
 
     # for a given window, build signals from bootstrap samples
-    local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
+    local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(short_term=short_term, long_term=long_term)
 
     # build forecasts from bootstrap signals
     local_strategy.bootstrap_forecasts_info = local_strategy.build_forecasts_from_bootstrap_signals()
@@ -235,7 +236,14 @@ if __name__ == "__main__":
     }
 
     # define parameters list for multiprocessing
-    windows = range(30, 252 + 1, 1)
+    short_term_window_start = range(8, 32 + 1, 1)
+    short_term_windows = [[w, w+8, w+24] for w in short_term_window_start]
+
+    long_term_window_start = range(24, 96 + 1, 1)
+    long_term_windows = [[w, w+24, w+72] for w in long_term_window_start]
+
+    windows = [(s, l) for s in short_term_windows for l in long_term_windows]
+
     parameters_list = [
         {
             'strategy_params': strategy_params,
@@ -250,11 +258,11 @@ if __name__ == "__main__":
 
     # final strategy inputs
     strategy = training_etfstsm_cta(vol_target=strategy_params['vol_target'],
-                                bar_name=strategy_params['bar_name'],
-                                k=strategy_params['k'],
-                                alpha=strategy_params['alpha'],
-                                utility=strategy_params['utility'],
-                                use_seed=strategy_params['use_seed'])
+                                    bar_name=strategy_params['bar_name'],
+                                    k=strategy_params['k'],
+                                    alpha=strategy_params['alpha'],
+                                    utility=strategy_params['utility'],
+                                    use_seed=strategy_params['use_seed'])
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)

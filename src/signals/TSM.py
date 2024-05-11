@@ -27,7 +27,7 @@ class TSM:
 
         return momentum
     
-    def CTA(self, returns: pd.DataFrame, short_term: list, long_term: list, sw: int, pw: int, weights: list) -> torch.Tensor:
+    def CTA(self, returns: pd.DataFrame, short_term: list, long_term: list, sw: int=63, pw: int=252, weights: list=[1/3, 1/3, 1/3]) -> torch.Tensor:
         """
         Commodity Trading Advisor (CTA) Method to compute the strategy for asset allocation.
         
