@@ -61,10 +61,8 @@ class TSM:
             intermediate_signal = (standardized_diff * np.exp(-0.25 * (standardized_diff ** 2))) / 0.89
             intermediate_signals.append(intermediate_signal)
 
+        momentum = 0.0
         for i, w in enumerate(weights):
-            if i == 0:
-                momentum = w * intermediate_signals[i]
-            else:
-                momentum += w * intermediate_signals[i]
+            momentum += w * intermediate_signals[i]
 
         return momentum
