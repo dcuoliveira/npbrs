@@ -17,7 +17,7 @@ from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_strat_opt_results
 
-class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
+class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  vol_target: float,
                  bar_name: str,
@@ -59,7 +59,7 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         Functionals.__init__(self, alpha=alpha)
     
         # init strategy attributes
-        self.sysname = "training_etfstsm"
+        self.sysname = "training_etfstsm_moskowitz"
         self.instruments = [
         
             'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
@@ -160,7 +160,7 @@ def objective(params):
     window = params['window']
 
     # Initialize strategy within each process
-    local_strategy = training_etfstsm(
+    local_strategy = training_etfstsm_moskowitz(
         vol_target=strategy_params['vol_target'],
         bar_name=strategy_params['bar_name'],
         boot_method=strategy_params['boot_method'],
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         utilities = pool.map(objective, parameters_list)
 
     # final strategy inputs
-    strategy = training_etfstsm(vol_target=strategy_params['vol_target'],
+    strategy = training_etfstsm_moskowitz(vol_target=strategy_params['vol_target'],
                                 bar_name=strategy_params['bar_name'],
                                 k=strategy_params['k'],
                                 alpha=strategy_params['alpha'],

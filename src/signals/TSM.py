@@ -27,82 +27,44 @@ class TSM:
 
         return momentum
     
-    # BAZ method implementation
-    def Baz(self,
-            L: int,
-            S: int) -> torch.Tensor:
+    def CTA(self, returns: pd.DataFrame, short_term: list, long_term: list, sw: int, pw: int, weights: list) -> torch.Tensor:
         """
-        Baz Method to compute the strategy for asset allocation.
-        Args:
-        L: long time scale (24,48,96)
-        S: short time scale (8,16,32)
+        Commodity Trading Advisor (CTA) Method to compute the strategy for asset allocation.
+        
         Returns:
-            position_sizing (torch.tensor): Moskowitz method for Position sizing with values between +1 or -1
+            position_sizing (torch.tensor): CTA method for Position sizing with +1 or -1
+
+        Paper: Baz et al. (2015) - Dissecting Investment Strategies in the Cross Sectionand Time Series.
         """
-        N = self.time_series.shape[0]
-        MACD = self.EWMA(S) - self.EWMA(L) 
-        # standard deviation of the last 63 days
-        STD = torch.std(self.time_series_window[(N - 63):N,:],axis = 0)
-        STD_year = torch.std(self.time_series_window[(N - 252):N,:],axis = 0)
-        # calculate Q
-        Q = MACD/STD
-        #
-        Y = Q/STD_year
-        # compute positions
-        position_sizing = (Y*torch.exp(-(Y*Y)/4.0))/0.89
 
-        return position_sizing
-    
-    # Evaluate Strategy (TSOM: Time series momentum)
-    def evaluate_strategy(self,
-                          real_returns: torch.Tensor,
-                          #predicted_returns: torch.Tensor,
-                          method: str = "Moskowitz",
-                          L: int = 24,
-                          S: int = 8) -> torch.Tensor:
-        # calculate strategy
-        position_sizing = None
-        if method == "Moskowitz":
-            position_sizing = self.Moskowitz()
-        else: # Baz method selected
-            position_sizing = self.Baz(L,S)
-        # VOLATILITY
-        sigma_TGT = 0.15
-        sigma_t = self.EWSD(60)
-        # compute TSOM
-        return_TSOM = torch.mean(sigma_TGT*((position_sizing*real_returns)/sigma_t))
-        # return value
-        return return_TSOM
+        if range(len(short_term)) == range(len(long_term)):
+            ks = range(len(short_term)) 
+        else:
+            raise ValueError("Short and Long term should be of same length")
 
+        intermediate_signals = []
+        for k in ks:
 
-    # Exponential Weighted Average of all assets of the last S days
-    # TO DO: correct when S is larger than the number of time series points!
-    def EWMA(self,
-             S: int) -> torch.Tensor:
-        N = self.time_series.shape[0]
-        alpha = (S-1)/S
-        time_series_window = self.time_series[(N - S):N,:]
-        weights = torch.ones(1, S)
-        for idx in range(S-2,-1,-1):
-            weights[0,idx] = (1-alpha)*weights[0,idx + 1]
-        #
-        weights = alpha*weights
-        #
-        return (torch.matmul(weights, time_series_window))
-    
-    # Exponential Weighted Standard Deviation of all assets of the last S days
-    # TO DO: correct when S is larger than the number of time series points!
-    def EWSD(self,
-             S: int) -> torch.Tensor:
-        N = self.time_series.shape[0]
-        alpha = (S-1)/S
-        time_series_window = self.time_series[(N - S):N,:]
-        weights = torch.ones(S,1)
-        for idx in range(S-2,-1,-1):
-            weights[idx,0] = (1-alpha)*weights[idx + 1,0]
-        #
-        wtime_series_window = time_series_window*weights
-        mean_wtime_series_window = torch.sum(wtime_series_window,axis = 0)
-        sd_wtime_series_window =  (wtime_series_window - mean_wtime_series_window)*(wtime_series_window - mean_wtime_series_window)
-        #
-        return (torch.mean(sd_wtime_series_window, axis = 0))
+            # compute short and long-term ewma
+            short_term_signal = returns.ewm(halflife=short_term[k]).mean()
+            long_term_signal = returns.ewm(halflife=long_term[k]).mean()
+
+            # compute diff
+            signal_diff = short_term_signal - long_term_signal
+
+            # standardize diff
+            standardized_diff = signal_diff / returns.rolling(window=sw).std()
+
+            # standardize (standardized_diff)
+            standardized_diff = standardized_diff / standardized_diff.rolling(window=pw).std()
+
+            intermediate_signal = (standardized_diff * np.exp(-0.25 * (standardized_diff ** 2))) / 0.89
+            intermediate_signals.append(intermediate_signal)
+
+        for i, w in enumerate(weights):
+            if i == 0:
+                momentum = w * intermediate_signals[i]
+            else:
+                momentum += w * intermediate_signals[i]
+
+        return momentum

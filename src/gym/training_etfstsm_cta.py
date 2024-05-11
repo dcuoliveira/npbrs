@@ -1,7 +1,7 @@
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+# sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import pandas as pd
 import numpy as np
@@ -17,7 +17,7 @@ from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_strat_opt_results
 
-class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
+class training_etfstsm_cta(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  vol_target: float,
                  bar_name: str,
@@ -56,11 +56,10 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
 
         """
 
-        if k != 0:
-            Functionals.__init__(self, alpha=alpha)
+        Functionals.__init__(self, alpha=alpha)
     
         # init strategy attributes
-        self.sysname = "training_etfstsm_fixed"
+        self.sysname = "training_etfstsm_cta"
         self.instruments = [
         
             'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
@@ -82,14 +81,13 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         self.carry_info = None
 
         # generate bootstrap samples from returns
-        if k != 0:
-            DependentBootstrapSampling.__init__(self,
-                                                time_series=torch.tensor(self.returns_info.to_numpy()),
-                                                boot_method=boot_method,
-                                                Bsize=Bsize,
-                                                use_seed=use_seed)
-            self.all_samples = self.sample_many_paths(k=k)
-            self.n_bootstrap_samples = self.all_samples.shape[0]
+        DependentBootstrapSampling.__init__(self,
+                                            time_series=torch.tensor(self.returns_info.to_numpy()),
+                                            boot_method=boot_method,
+                                            Bsize=Bsize,
+                                            use_seed=use_seed)
+        self.all_samples = self.sample_many_paths(k=k)
+        self.n_bootstrap_samples = self.all_samples.shape[0]
 
         # generate signals from bootstrap samples
         self.bootstrap_signals_info = None
@@ -111,8 +109,6 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
         return returns_df
             
     def build_signals(self, window: int):
-
-        self.windows = window
         signals = {}
         for instrument in self.instruments:
             signal = self.Moskowitz(returns=self.returns_info[[f"{instrument}_returns"]], window=window)
@@ -158,21 +154,65 @@ class training_etfstsm(TSM, DependentBootstrapSampling, Functionals):
                 bootrap_forecasts[f"bootstrap_{i}"] = forecasts
     
             return bootrap_forecasts
+    
+def objective(params):
+    strategy_params = params['strategy_params']
+    window = params['window']
+
+    # Initialize strategy within each process
+    local_strategy = training_etfstsm_cta(
+        vol_target=strategy_params['vol_target'],
+        bar_name=strategy_params['bar_name'],
+        boot_method=strategy_params['boot_method'],
+        Bsize=strategy_params['Bsize'],
+        k=strategy_params['k'],
+        alpha=strategy_params['alpha'],
+        utility=strategy_params['utility'],
+        use_seed=strategy_params['use_seed'])
+
+    # for a given window, build signals from bootstrap samples
+    local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
+
+    # build forecasts from bootstrap signals
+    local_strategy.bootstrap_forecasts_info = local_strategy.build_forecasts_from_bootstrap_signals()
+
+    # run backtest for each boostrap samples
+    utilities_given_hyperparam = []
+    for i in range(local_strategy.n_bootstrap_samples):
+        # build signals info
+        local_strategy.signals_info = local_strategy.bootstrap_signals_info[f"bootstrap_{i}"]
+
+        # build forecasts info
+        local_strategy.forecasts_info = local_strategy.bootstrap_forecasts_info[f"bootstrap_{i}"]
+
+        # run backtest
+        cerebro = Backtest(strat_metadata=local_strategy)
+        cerebro.run_backtest(start_date=strategy_params['start_date'],
+                             end_date=strategy_params['end_date'],
+                             instruments=local_strategy.instruments,
+                             bar_name=local_strategy.bar_name,
+                             vol_window=252,
+                             vol_target=local_strategy.vol_target,
+                             resample_freq="B")
+        
+        # compute strategy performance
+        metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
+        utilities_given_hyperparam.append(metrics[local_strategy.utility])
+
+    return (torch.tensor(utilities_given_hyperparam))
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
-    parser.add_argument('--end_date', type=str, help='End date for the strategy.', default="2015-12-31")
-    parser.add_argument('--window', type=int, help='Lookback window for the trend signal.', default=90)
-
-    parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=0)
     parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
-    parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=0) # -1 = minimum, 1 = maximum
+    parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=1) # -1 = minimum, 1 = maximum
+    parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
-    parser.add_argument('--use_seed', type=int, help='If to use seed on the bootstraps or not.', default=False)
+    parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
+    parser.add_argument('--end_date', type=str, help='End date for the strategy.', default="2015-12-31")
+    parser.add_argument('--use_seed', type=int, help='If to use seed on the bootstraps or not.', default=True)
 
     args = parser.parse_args()
 
@@ -194,19 +234,48 @@ if __name__ == "__main__":
             'use_seed': args.use_seed
     }
 
+    # define parameters list for multiprocessing
+    windows = range(30, 252 + 1, 1)
+    parameters_list = [
+        {
+            'strategy_params': strategy_params,
+            'window': w
+        } for w in windows
+    ]
+
+    # define multiprocessing pool
+    utilities = []
+    with multiprocessing.Pool(processes=args.cpu_count) as pool:
+        utilities = pool.map(objective, parameters_list)
+
     # final strategy inputs
-    strategy = training_etfstsm(vol_target=strategy_params['vol_target'],
+    strategy = training_etfstsm_cta(vol_target=strategy_params['vol_target'],
                                 bar_name=strategy_params['bar_name'],
                                 k=strategy_params['k'],
                                 alpha=strategy_params['alpha'],
                                 utility=strategy_params['utility'],
                                 use_seed=strategy_params['use_seed'])
+        
+    # applying the functional
+    final_utility = strategy.apply_functional(x=utilities, func=args.functional)
+
+    # find position of scores that match final_utility
+    position = strategy.find_utility_position(utilities=utilities, utility_value=final_utility)
+
+    # find window that matches position
+    robust_parameter = windows[position]
+
+    # save relevant attributes fro optimization
+    strategy.utilities = utilities
+    strategy.windows = windows
+    strategy.final_utility = final_utility
+    strategy.robust_parameter = robust_parameter
 
     # results path
-    results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.window}')
+    results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
 
     # run strategy with robust parameter IN-SAMPLE
-    strategy.signals_info = strategy.build_signals(window=args.window)
+    strategy.signals_info = strategy.build_signals(window=robust_parameter)
     strategy.forecasts_info = strategy.build_forecasts()
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(start_date=args.start_date,
@@ -217,12 +286,6 @@ if __name__ == "__main__":
                          vol_target=strategy.vol_target,
                          resample_freq="B")
     
-    # add relevant training info
-    strategy.utilities = strategy.windows = None
-    summary_statistics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
-    strategy.final_utility = summary_statistics[args.utility]
-    strategy.robust_parameter = args.window
-    
     train_cerebro = copy.deepcopy(cerebro)
     save_strat_opt_results(results_path=results_path,
                            args=args,
@@ -231,7 +294,7 @@ if __name__ == "__main__":
                            train=True)
      
     # run strategy with robust parameter OUT-OF-SAMPLE
-    strategy.signals_info = strategy.build_signals(window=args.window)
+    strategy.signals_info = strategy.build_signals(window=robust_parameter)
     strategy.forecasts_info = strategy.build_forecasts()
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(start_date=args.end_date,
@@ -241,12 +304,6 @@ if __name__ == "__main__":
                          vol_window=90,
                          vol_target=strategy.vol_target,
                          resample_freq="B")
-    
-    # add relevant test info
-    strategy.utilities = strategy.windows = None
-    summary_statistics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
-    strategy.final_utility = summary_statistics[args.utility]
-    strategy.robust_parameter = args.window
     
     test_cerebro = copy.deepcopy(cerebro)   
     save_strat_opt_results(results_path=results_path,
