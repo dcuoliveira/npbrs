@@ -189,6 +189,8 @@ def objective(params):
         cerebro = Backtest(strat_metadata=local_strategy)
         cerebro.run_backtest(start_date=strategy_params['start_date'],
                              end_date=strategy_params['end_date'],
+                             train_size=strategy_params['train_size'],
+                             train_flag=strategy_params['train_flag'],
                              instruments=local_strategy.instruments,
                              bar_name=local_strategy.bar_name,
                              vol_window=252,
@@ -211,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
     parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
-    parser.add_argument('--end_date', type=str, help='End date for the strategy.', default="2015-12-31")
+    parser.add_argument('--train_size', type=str, help='Size of the training data in percentual terms', default=0.8)
     parser.add_argument('--use_seed', type=int, help='If to use seed on the bootstraps or not.', default=True)
 
     args = parser.parse_args()
@@ -222,7 +224,9 @@ if __name__ == "__main__":
     # define the parameters for strategy initialization
     strategy_params = {
             'start_date': args.start_date,
-            'end_date': args.end_date,
+            'end_date': None,
+            'train_size': args.train_size,
+            'train_flag': True,
             'vol_target': 0.15,
             'bar_name': "Close",
             'boot_method': "cbb",
@@ -250,11 +254,11 @@ if __name__ == "__main__":
 
     # final strategy inputs
     strategy = training_etfstsm_moskowitz(vol_target=strategy_params['vol_target'],
-                                bar_name=strategy_params['bar_name'],
-                                k=strategy_params['k'],
-                                alpha=strategy_params['alpha'],
-                                utility=strategy_params['utility'],
-                                use_seed=strategy_params['use_seed'])
+                                          bar_name=strategy_params['bar_name'],
+                                          k=strategy_params['k'],
+                                          alpha=strategy_params['alpha'],
+                                          utility=strategy_params['utility'],
+                                          use_seed=strategy_params['use_seed'])
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
@@ -279,7 +283,9 @@ if __name__ == "__main__":
     strategy.forecasts_info = strategy.build_forecasts()
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(start_date=args.start_date,
-                         end_date=args.end_date,
+                         end_date=None,
+                         train_size=args.train_size,
+                         train_flag=True,
                          instruments=strategy.instruments,
                          bar_name=strategy.bar_name,
                          vol_window=90,
@@ -297,8 +303,10 @@ if __name__ == "__main__":
     strategy.signals_info = strategy.build_signals(window=robust_parameter)
     strategy.forecasts_info = strategy.build_forecasts()
     cerebro = Backtest(strat_metadata=strategy)
-    cerebro.run_backtest(start_date=args.end_date,
+    cerebro.run_backtest(start_date=args.start_date,
                          end_date=None,
+                         train_size=args.train_size,
+                         train_flag=False,
                          instruments=strategy.instruments,
                          bar_name=strategy.bar_name,
                          vol_window=90,
