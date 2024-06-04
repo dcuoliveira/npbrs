@@ -17,6 +17,8 @@ class Backtest(Diagnostics):
     def standardize_inputs(self,
                            start_date: str,
                            end_date: str,
+                           train_size: float,
+                           train_flag: bool,
                            instruments,
                            bar_name: str,
                            vol_window: int,
@@ -43,12 +45,12 @@ class Backtest(Diagnostics):
             else:
                 tmp_carry = self.carry[inst][[bar_name]].resample(resample_freq).last().ffill()
 
-            bars_list.append(tmp_bars.loc[start_date:end_date].rename(columns={bar_name: inst}))
-            vols_list.append(tmp_vols.loc[start_date:end_date].rename(columns={bar_name: inst}))
-            rets_list.append(tmp_rets.loc[start_date:end_date].rename(columns={bar_name: inst}))
-            carrys_list.append(tmp_carry.loc[start_date:end_date].rename(columns={bar_name: inst}))
-            signals_list.append(tmp_signals.loc[start_date:end_date].rename(columns={bar_name: inst}))
-            forecasts_list.append(tmp_forecasts.loc[start_date:end_date].rename(columns={bar_name: inst}))
+            bars_list.append(tmp_bars.rename(columns={bar_name: inst}))
+            vols_list.append(tmp_vols.rename(columns={bar_name: inst}))
+            rets_list.append(tmp_rets.rename(columns={bar_name: inst}))
+            carrys_list.append(tmp_carry.rename(columns={bar_name: inst}))
+            signals_list.append(tmp_signals.rename(columns={bar_name: inst}))
+            forecasts_list.append(tmp_forecasts.rename(columns={bar_name: inst}))
 
         self.bars_df = pd.concat(bars_list, axis=1)
         self.vols_df = pd.concat(vols_list, axis=1)
@@ -56,6 +58,33 @@ class Backtest(Diagnostics):
         self.carrys_df = pd.concat(carrys_list, axis=1)
         self.signals_df = pd.concat(signals_list, axis=1)
         self.forecasts_df = pd.concat(forecasts_list, axis=1)
+                
+        if (end_date is None) and (train_size is not None):
+
+            print("end_date is None, using train_size to determine end_date")
+
+            if train_flag is None:
+                raise ValueError("train_flag must be specified if end_date is None")
+
+            end_size = int(len(self.signals_df) * train_size)
+
+            if train_flag:
+                start_date = self.signals_df.index[0]
+                end_date = tmp_bars.index[end_size]
+            else:
+                start_date = tmp_bars.index[end_size]
+                end_date = tmp_bars.index[-1]
+        elif (end_date is None) and (train_size is None):
+            raise ValueError("end_date and train_size cannot both be None")
+        else:
+            print("end_date is not None, using end_date as specified")
+
+        self.bars_df = self.bars_df.loc[start_date:end_date]
+        self.vols_df = self.vols_df.loc[start_date:end_date]
+        self.rets_df = self.rets_df.loc[start_date:end_date]
+        self.carrys_df = self.carrys_df.loc[start_date:end_date]
+        self.signals_df = self.signals_df.loc[start_date:end_date]
+        self.forecasts_df = self.forecasts_df.loc[start_date:end_date]
 
     def run_backtest(self,
                      instruments: list,
@@ -64,11 +93,15 @@ class Backtest(Diagnostics):
                      vol_target: float,
                      resample_freq: str,
                      start_date: str,
-                     end_date: str,):
+                     end_date: str,
+                     train_size: float=None,
+                     train_flag: bool=None,):
 
         # standardize dict inputs
         self.standardize_inputs(start_date=start_date,
                                 end_date=end_date,
+                                train_size=train_size,
+                                train_flag=train_flag,
                                 instruments=instruments,
                                 bar_name=bar_name,
                                 vol_window=vol_window,
