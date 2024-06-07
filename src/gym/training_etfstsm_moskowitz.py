@@ -203,6 +203,9 @@ def objective(params):
         
         # compute strategy performance
         metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
+
+        print("{local_strategy.utility} for window {window} and bootstrap sample {i} is {metrics[local_strategy.utility]")
+
         utilities_given_hyperparam.append(metrics[local_strategy.utility])
 
     return (torch.tensor(utilities_given_hyperparam))
@@ -224,8 +227,6 @@ if __name__ == "__main__":
 
     if args.cpu_count == -1:
         args.cpu_count = multiprocessing.cpu_count() - 1
-
-    print("entrou")
 
     # define the parameters for strategy initialization
     strategy_params = {
@@ -284,8 +285,6 @@ if __name__ == "__main__":
 
     # results path
     results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
-
-    print("saiu")
 
     # run strategy with robust parameter IN-SAMPLE
     strategy.signals_info = strategy.build_signals(window=robust_parameter)

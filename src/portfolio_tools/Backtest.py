@@ -61,8 +61,6 @@ class Backtest(Diagnostics):
                 
         if (end_date is None) and (self.train_size is not None):
 
-            print("end_date is None, using train_size to determine end_date")
-
             if train_flag is None:
                 raise ValueError("train_flag must be specified if end_date is None")
             end_size = int(len(self.signals_df) * self.train_size)
