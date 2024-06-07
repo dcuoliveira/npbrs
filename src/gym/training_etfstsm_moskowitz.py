@@ -265,7 +265,7 @@ if __name__ == "__main__":
                                           train_size=strategy_params['train_size'])
 
     # define multiprocessing pool
-    print(f"Running {strategy.sysname} Training in parallel ...")
+    print(f"Running {strategy.sysname} in parallel ...")
     utilities = []
     with multiprocessing.Pool(processes=args.cpu_count) as pool:
         utilities = pool.map(objective, parameters_list)
