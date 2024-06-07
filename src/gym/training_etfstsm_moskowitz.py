@@ -204,8 +204,6 @@ def objective(params):
         # compute strategy performance
         metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
 
-        print(f"Utility: {metrics[local_strategy.utility]}, Window: {window}, Bootstrap: {i}, Metric: {metrics[local_strategy.utility]}")
-
         utilities_given_hyperparam.append(metrics[local_strategy.utility])
 
     return (torch.tensor(utilities_given_hyperparam))
@@ -257,12 +255,7 @@ if __name__ == "__main__":
         } for w in windows
     ]
 
-    # define multiprocessing pool
-    utilities = []
-    with multiprocessing.Pool(processes=args.cpu_count) as pool:
-        utilities = pool.map(objective, parameters_list)
-
-    # final strategy inputs
+    # strategy inputs
     strategy = training_etfstsm_moskowitz(vol_target=strategy_params['vol_target'],
                                           bar_name=strategy_params['bar_name'],
                                           k=strategy_params['k'],
@@ -270,6 +263,12 @@ if __name__ == "__main__":
                                           utility=strategy_params['utility'],
                                           use_seed=strategy_params['use_seed'],
                                           train_size=strategy_params['train_size'])
+
+    # define multiprocessing pool
+    print(f"Running {strategy.sysname} Training in parallel ...")
+    utilities = []
+    with multiprocessing.Pool(processes=args.cpu_count) as pool:
+        utilities = pool.map(objective, parameters_list)
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
