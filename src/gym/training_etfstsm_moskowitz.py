@@ -204,7 +204,7 @@ def objective(params):
         # compute strategy performance
         metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
 
-        print("{local_strategy.utility} for window {window} and bootstrap sample {i} is {metrics[local_strategy.utility]")
+        print(f"Utility: {metrics[local_strategy.utility]}, Window: {window}, Bootstrap: {i}, Metric: {metrics[local_strategy.utility]}")
 
         utilities_given_hyperparam.append(metrics[local_strategy.utility])
 
