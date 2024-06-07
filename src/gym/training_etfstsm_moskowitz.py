@@ -163,8 +163,6 @@ def objective(params):
     strategy_params = params['strategy_params']
     window = params['window']
 
-    print(strategy_params['train_size'])
-
     # Initialize strategy within each process
     local_strategy = training_etfstsm_moskowitz(
         vol_target=strategy_params['vol_target'],
@@ -222,7 +220,7 @@ if __name__ == "__main__":
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
     parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
-    parser.add_argument('--train_size', type=str, help='Size of the training data in percentual terms', default=0.8)
+    parser.add_argument('--train_size', type=float, help='Size of the training data in percentual terms', default=0.8)
     parser.add_argument('--use_seed', type=int, help='If to use seed on the bootstraps or not.', default=True)
 
     args = parser.parse_args()
