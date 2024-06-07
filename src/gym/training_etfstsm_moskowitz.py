@@ -283,6 +283,8 @@ if __name__ == "__main__":
     # results path
     results_path = os.path.join(OUTPUT_PATH, strategy.sysname, f'{args.utility}_{args.functional}_{args.alpha}_{args.k}')
 
+    print("saiu")
+
     # run strategy with robust parameter IN-SAMPLE
     strategy.signals_info = strategy.build_signals(window=robust_parameter)
     strategy.forecasts_info = strategy.build_forecasts()
