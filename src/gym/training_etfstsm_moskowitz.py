@@ -21,6 +21,7 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  vol_target: float,
                  bar_name: str,
+                 train_size: float=0.8,
                  boot_method: str = "cbb",
                  Bsize: int = 100,
                  k: int = 100,
@@ -37,6 +38,8 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
             The target volatility of the strategy.
         bar_name : str
             The name of the bar to use for the strategy.
+        train_size : float, optional
+            The size of the training data in percentual terms. The default is 0.8.
         boot_method : str, optional
             The bootstrap method to use. The default is "cbb".
         Bsize : int, optional
@@ -60,6 +63,7 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
     
         # init strategy attributes
         self.sysname = "training_etfstsm_moskowitz"
+        self.train_size = train_size
         self.instruments = [
         
             'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
@@ -163,6 +167,7 @@ def objective(params):
     local_strategy = training_etfstsm_moskowitz(
         vol_target=strategy_params['vol_target'],
         bar_name=strategy_params['bar_name'],
+        train_size=strategy_params['train_size'],
         boot_method=strategy_params['boot_method'],
         Bsize=strategy_params['Bsize'],
         k=strategy_params['k'],
@@ -189,7 +194,6 @@ def objective(params):
         cerebro = Backtest(strat_metadata=local_strategy)
         cerebro.run_backtest(start_date=strategy_params['start_date'],
                              end_date=strategy_params['end_date'],
-                             train_size=strategy_params['train_size'],
                              train_flag=strategy_params['train_flag'],
                              instruments=local_strategy.instruments,
                              bar_name=local_strategy.bar_name,
@@ -258,7 +262,8 @@ if __name__ == "__main__":
                                           k=strategy_params['k'],
                                           alpha=strategy_params['alpha'],
                                           utility=strategy_params['utility'],
-                                          use_seed=strategy_params['use_seed'])
+                                          use_seed=strategy_params['use_seed'],
+                                          train_size=strategy_params['train_size'])
         
     # applying the functional
     final_utility = strategy.apply_functional(x=utilities, func=args.functional)
@@ -284,7 +289,6 @@ if __name__ == "__main__":
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(start_date=args.start_date,
                          end_date=None,
-                         train_size=args.train_size,
                          train_flag=True,
                          instruments=strategy.instruments,
                          bar_name=strategy.bar_name,
@@ -305,7 +309,6 @@ if __name__ == "__main__":
     cerebro = Backtest(strat_metadata=strategy)
     cerebro.run_backtest(start_date=args.start_date,
                          end_date=None,
-                         train_size=args.train_size,
                          train_flag=False,
                          instruments=strategy.instruments,
                          bar_name=strategy.bar_name,
