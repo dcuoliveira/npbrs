@@ -65,7 +65,7 @@ class Backtest(Diagnostics):
 
             if train_flag is None:
                 raise ValueError("train_flag must be specified if end_date is None")
-
+            print(f"signal size = {len(self.signals_df)}, train_size={train_size}")
             end_size = int(len(self.signals_df) * train_size)
 
             if train_flag:
