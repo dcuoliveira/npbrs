@@ -212,6 +212,9 @@ def objective(params):
 
 if __name__ == "__main__":
 
+    # start time
+    start_time = pd.Timestamp.now()
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
@@ -319,6 +322,10 @@ if __name__ == "__main__":
                          vol_target=strategy.vol_target,
                          resample_freq="B")
     
+    # add execution time to args
+    end_time = pd.Timestamp.now()
+    args.execution_time = end_time - start_time
+
     test_cerebro = copy.deepcopy(cerebro)   
     save_strat_opt_results(results_path=results_path,
                            args=args,
