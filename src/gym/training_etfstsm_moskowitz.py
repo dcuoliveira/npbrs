@@ -225,6 +225,8 @@ if __name__ == "__main__":
     if args.cpu_count == -1:
         args.cpu_count = multiprocessing.cpu_count() - 1
 
+    print("entrou")
+
     # define the parameters for strategy initialization
     strategy_params = {
             'start_date': args.start_date,
