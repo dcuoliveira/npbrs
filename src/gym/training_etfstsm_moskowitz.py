@@ -163,6 +163,8 @@ def objective(params):
     strategy_params = params['strategy_params']
     window = params['window']
 
+    print(strategy_params['train_size'])
+
     # Initialize strategy within each process
     local_strategy = training_etfstsm_moskowitz(
         vol_target=strategy_params['vol_target'],
