@@ -21,13 +21,13 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  vol_target: float,
                  bar_name: str,
-                 train_size: float=0.8,
+                 train_size: float = 0.8,
                  boot_method: str = "cbb",
                  Bsize: int = 100,
                  k: int = 100,
-                 alpha: float=0.95,
-                 utility: str="Sharpe",
-                 use_seed: bool=True) -> None:
+                 alpha: float = 0.95,
+                 utility: str = "Sharpe",
+                 use_seed: bool = True) -> None:
         """
         This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
         It is used to train the ETF TSM strategy.
@@ -66,9 +66,10 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
         self.train_size = train_size
         self.instruments = [
         
-            'SPY', 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
-            'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
-            'XLE', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
+            'SPY',
+            # 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
+            # 'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
+            # 'XLE', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
         
         ]
         self.vol_target = vol_target
