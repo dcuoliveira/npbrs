@@ -27,7 +27,8 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
                  k: int = 100,
                  alpha: float = 0.95,
                  utility: str = "Sharpe",
-                 use_seed: bool = True) -> None:
+                 use_seed: bool = True,
+                 data_freq: int=252) -> None:
         """
         This class is a wrapper for the TSM class and the DependentBootstrapSampling class. 
         It is used to train the ETF TSM strategy.
@@ -74,6 +75,7 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
         ]
         self.vol_target = vol_target
         self.bar_name = bar_name
+        self.data_freq = data_freq
 
         # inputs
         inputs = load_pickle(os.path.join(INPUT_PATH, self.sysname, f"{self.sysname}.pickle"))
@@ -248,7 +250,7 @@ if __name__ == "__main__":
     }
 
     # define parameters list for multiprocessing
-    windows = range(30, 252 + 1, 1)
+    windows = range(30, 377 + 1, 1)
     parameters_list = [
         {
             'strategy_params': strategy_params,
