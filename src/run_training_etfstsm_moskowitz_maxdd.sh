@@ -1,4 +1,4 @@
-python -m gym.training_etfstsm_moskowitz --utility MaxDD --functional means -- --alpha 1 --k 100 --train_size 0.8 --cpu_count -1
+python -m gym.training_etfstsm_moskowitz --utility MaxDD --functional means --alpha 1 --k 100 --train_size 0.8 --cpu_count -1
 python -m gym.training_etfstsm_moskowitz --utility MaxDD --functional means --alpha 0.90 --k 100 --train_size 0.8 --cpu_count -1
 python -m gym.training_etfstsm_moskowitz --utility MaxDD --functional means --alpha 0.80 --k 100 --train_size 0.8 --cpu_count -1
 python -m gym.training_etfstsm_moskowitz --utility MaxDD --functional means --alpha 0.70 --k 100 --train_size 0.8 --cpu_count -1
