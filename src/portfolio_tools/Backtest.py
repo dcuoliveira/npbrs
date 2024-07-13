@@ -14,6 +14,7 @@ class Backtest(Diagnostics):
         self.forecasts = strat_metadata.forecasts_info
         self.carry = strat_metadata.carry_info
         self.train_size = strat_metadata.train_size
+        self.data_freq = strat_metadata.data_freq
 
     def standardize_inputs(self,
                            start_date: str,
@@ -34,7 +35,7 @@ class Backtest(Diagnostics):
             tmp_bars = self.bars[inst][[bar_name]].resample(resample_freq).last().ffill()
 
             tmp_rets = np.log(tmp_bars).diff()
-            tmp_vols = tmp_rets.rolling(window=vol_window).std()
+            tmp_vols = tmp_rets.rolling(window=vol_window).std() * np.sqrt(self.data_freq)
 
             tmp_signals = self.signals[inst].resample(resample_freq).last().ffill()
             tmp_forecasts = self.forecasts[inst].resample(resample_freq).last().ffill()
@@ -103,13 +104,13 @@ class Backtest(Diagnostics):
                                 resample_freq=resample_freq)
         
         # compute vol scaling
-        vol_scale = vol_target / self.vols_df
+        vol_scale = (vol_target / self.vols_df).shift(-1)
 
         # compute portfolio returns
-        self.portfolio_returns = (self.forecasts_df * self.rets_df.shift(-1)).fillna(0)
+        self.portfolio_returns = (self.forecasts_df.shift(-1) * self.rets_df).fillna(0)
 
         # compute scaled portfolio returns
-        self.scaled_portfolio_returns = (vol_scale / np.sqrt(252)) * self.portfolio_returns
+        self.scaled_portfolio_returns = vol_scale * self.portfolio_returns
 
         # aggregate portfolio returns
         self.agg_portfolio_returns = pd.DataFrame(self.portfolio_returns.mean(axis=1), columns=["portfolio_returns"])
