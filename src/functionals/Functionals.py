@@ -142,7 +142,7 @@ class Functionals:
             torch.tensor: output of the functional.
         """
 
-        if self.alpha is None:
+        if self.alpha == 0:
             self.alpha = alpha
 
         if func == "eigenvalues":
