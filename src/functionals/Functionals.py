@@ -130,16 +130,20 @@ class Functionals:
 
         return x_selected
 
-    def apply_functional(self, x: torch.tensor, func: str="eigenvalues") -> torch.tensor:
+    def apply_functional(self, x: torch.tensor, func: str="eigenvalues", alpha: float=0.95) -> torch.tensor:
         """
         This function applies a functional to a given matrix.
 
         Args:
             x (torch.tensor): input matrix.
             func (str): functional to be applied. Defaults to "eigenvalues".
+            alpha (float): percentile. Defaults to 0.95.
         Returns:
             torch.tensor: output of the functional.
         """
+
+        if self.alpha is None:
+            self.alpha = alpha
 
         if func == "eigenvalues":
             self.scores = self.eigenvalues(x)
