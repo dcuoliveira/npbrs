@@ -130,7 +130,7 @@ class Functionals:
 
         return x_selected
 
-    def apply_functional(self, x: torch.tensor, func: str="eigenvalues", alpha: float=0.95) -> torch.tensor:
+    def apply_functional(self, x: torch.tensor, func: str="eigenvalues", alpha: float=None) -> torch.tensor:
         """
         This function applies a functional to a given matrix.
 
@@ -142,7 +142,7 @@ class Functionals:
             torch.tensor: output of the functional.
         """
 
-        if self.alpha == 0:
+        if alpha is not None:
             self.alpha = alpha
 
         if func == "eigenvalues":
