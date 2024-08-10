@@ -220,7 +220,6 @@ if __name__ == "__main__":
 
     parser.add_argument('--utility', type=str, help='Utility for the strategy returns evaluation.', default="Sharpe")
     parser.add_argument('--functional', type=str, help='Functional to aggregate across bootstrap samples.', default="means")
-    parser.add_argument('--alpha', type=float, help='Percentile of the empirical distribution.', default=0) # -1 = minimum, 1 = maximum, 0 = multiple alphas
     parser.add_argument('--k', type=int, help='Number of bootstrap samples.', default=10)
     parser.add_argument('--cpu_count', type=int, help='Number of CPUs to parallelize process.', default=1)
     parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
@@ -243,7 +242,7 @@ if __name__ == "__main__":
             'boot_method': "cbb",
             'Bsize': 100,
             'k': args.k,
-            'alpha': args.alpha,
+            'alpha': None,
             'utility': args.utility,
             'functional': args.functional,
             'use_seed': args.use_seed
@@ -273,8 +272,10 @@ if __name__ == "__main__":
     with multiprocessing.Pool(processes=args.cpu_count) as pool:
         utilities = pool.map(objective, parameters_list)
 
-    alphas = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05, -1]
-    for alpha in alphas:        
+    alphas = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
+    for alpha in alphas:
+        print("Optimizing for alpha: ", alpha)
+        print("-----------------------------")        
         # applying the functional
         final_utility = strategy.apply_functional(x=utilities, func=args.functional, alpha=alpha)
 
@@ -283,6 +284,7 @@ if __name__ == "__main__":
 
         # find window that matches position
         robust_parameter = windows[position]
+        print(f"Robust Parameter: {robust_parameter}")
 
         # save relevant attributes fro optimization
         strategy.utilities = utilities
@@ -306,6 +308,9 @@ if __name__ == "__main__":
                             vol_target=strategy.vol_target,
                             resample_freq="B")
         
+        robust_utility_train = cerebro.compute_metric(portoflio_returns=cerebro.agg_scaled_portfolio_returns, metric_name=strategy_params['utility'])
+        print(f"Robust Utility Train: {robust_utility_train}")
+
         train_cerebro = copy.deepcopy(cerebro)
         save_strat_opt_results(results_path=results_path,
                             args=args,
@@ -326,6 +331,9 @@ if __name__ == "__main__":
                             vol_target=strategy.vol_target,
                             resample_freq="B")
         
+        robust_utility_test = cerebro.compute_metric(portoflio_returns=cerebro.agg_scaled_portfolio_returns, metric_name=strategy_params['utility'])
+        print(f"Robust Utility Test: {robust_utility_test}")
+        
         # add execution time to args
         end_time = pd.Timestamp.now()
         args.execution_time = end_time - start_time
@@ -336,6 +344,11 @@ if __name__ == "__main__":
                                cerebro=test_cerebro,
                                strategy=strategy,
                                train=False)
+        
+        # delete cerebro objects
+        del cerebro
+        del train_cerebro
+        del test_cerebro
         
         print(f"Optimization results saved in {results_path}")
 
