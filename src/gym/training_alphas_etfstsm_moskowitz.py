@@ -68,9 +68,9 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
         self.instruments = [
         
             'SPY',
-            # 'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
-            # 'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
-            # 'XLE', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
+            'IWM', 'EEM', 'TLT', 'USO', 'GLD', 'XLF',
+            'XLB', 'XLK', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',
+            'XLE', 'AGG', 'DBC', 'HYG', 'LQD','UUP'
         
         ]
         self.vol_target = vol_target
