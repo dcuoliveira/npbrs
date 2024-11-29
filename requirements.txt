@@ -1,0 +1,16 @@
+mkl==2021.4.0
+pandas
+numpy
+tqdm
+tensorflow
+tensorflow-probability
+torch
+torchvision
+torchaudio
+jupyterlab
+yfinance
+matplotlib
+openpyxl
+ipywidgets
+cvxopt
+pmdarima
