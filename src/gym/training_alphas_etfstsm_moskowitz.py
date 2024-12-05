@@ -18,10 +18,6 @@ from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_strat_opt_results
 
-def limit_memory(max_mem_gb):
-    max_mem = int(max_mem_gb * 1024 * 1024 * 1024)  # Convert GB to bytes and cast to int
-    resource.setrlimit(resource.RLIMIT_AS, (max_mem, max_mem))
-
 class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
                  vol_target: float,
@@ -230,7 +226,6 @@ if __name__ == "__main__":
     parser.add_argument('--start_date', type=str, help='Start date for the strategy.', default=None)
     parser.add_argument('--train_size', type=float, help='Size of the training data in percentual terms', default=0.8)
     parser.add_argument('--use_seed', type=int, help='If to use seed on the bootstraps or not.', default=True)
-    parser.add_argument('--memory_per_cpu', type=float, help='Memory limit per CPU in GB', default=2.0)
 
     args = parser.parse_args()
 
@@ -275,9 +270,7 @@ if __name__ == "__main__":
     # define multiprocessing pool
     print(f"Running {strategy.sysname} with Utility {args.utility} in Parallel ...")
     utilities = []
-    with multiprocessing.Pool(processes=args.cpu_count, 
-                            initializer=limit_memory, 
-                            initargs=(args.memory_per_cpu,)) as pool:
+    with multiprocessing.Pool(processes=args.cpu_count) as pool:
         utilities = pool.map(objective, parameters_list)
 
     alphas = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
