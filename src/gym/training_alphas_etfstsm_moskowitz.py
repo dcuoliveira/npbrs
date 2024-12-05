@@ -216,71 +216,6 @@ def objective(params):
 
     return (torch.tensor(utilities_given_hyperparam))
 
-def batch_objective(params):
-    strategy_params = params['strategy_params']
-    window = params['window']
-    
-    # Initialize strategy
-    local_strategy = training_etfstsm_moskowitz(
-        vol_target=strategy_params['vol_target'],
-        bar_name=strategy_params['bar_name'],
-        train_size=strategy_params['train_size'],
-        boot_method=strategy_params['boot_method'],
-        Bsize=strategy_params['Bsize'],
-        k=strategy_params['k'],
-        alpha=strategy_params['alpha'],
-        utility=strategy_params['utility'],
-        use_seed=strategy_params['use_seed'])
-    
-    # Process bootstrap samples in batches
-    batch_size = 100  # Adjust based on memory
-    utilities_given_hyperparam = []
-    
-    for batch_start in range(0, local_strategy.n_bootstrap_samples, batch_size):
-        batch_end = min(batch_start + batch_size, local_strategy.n_bootstrap_samples)
-        
-        # Process only current batch
-        batch_signals = {}
-        for i in range(batch_start, batch_end):
-            signals = {}
-            sample_df = pd.DataFrame(local_strategy.all_samples[i, :, :], 
-                                   columns=local_strategy.instruments, 
-                                   index=local_strategy.returns_info.index)
-            for instrument in local_strategy.instruments:
-                signal = local_strategy.Moskowitz(returns=sample_df[[instrument]], window=window)
-                signals[instrument] = signal.rename(columns={instrument: local_strategy.bar_name})
-            batch_signals[f"bootstrap_{i}"] = signals
-
-        # Process forecasts for current batch
-        batch_forecasts = {}
-        for i in range(batch_start, batch_end):
-            forecasts = {}
-            for instrument in local_strategy.instruments:
-                forecast = np.where(batch_signals[f"bootstrap_{i}"][instrument][[local_strategy.bar_name]] > 0, 1, -1)
-                forecasts[instrument] = pd.DataFrame(forecast,
-                                                   index=batch_signals[f"bootstrap_{i}"][instrument].index,
-                                                   columns=[local_strategy.bar_name])
-            batch_forecasts[f"bootstrap_{i}"] = forecasts
-
-        # Run backtest for current batch
-        for i in range(batch_start, batch_end):
-            local_strategy.signals_info = batch_signals[f"bootstrap_{i}"]
-            local_strategy.forecasts_info = batch_forecasts[f"bootstrap_{i}"]
-            
-            cerebro = Backtest(strat_metadata=local_strategy)
-            cerebro.run_backtest(...)
-            metrics = cerebro.compute_summary_statistics(portfolio_returns=cerebro.agg_scaled_portfolio_returns)
-            utilities_given_hyperparam.append(metrics[local_strategy.utility])
-            
-            # Clean up
-            del cerebro
-            
-        # Clean up batch data
-        del batch_signals
-        del batch_forecasts
-
-    return torch.tensor(utilities_given_hyperparam)
-
 if __name__ == "__main__":
 
     # start time
@@ -343,7 +278,7 @@ if __name__ == "__main__":
     with multiprocessing.Pool(processes=args.cpu_count, 
                             initializer=limit_memory, 
                             initargs=(args.memory_per_cpu,)) as pool:
-        utilities = pool.map(batch_objective, parameters_list)
+        utilities = pool.map(objective, parameters_list)
 
     alphas = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
     for alpha in alphas:
