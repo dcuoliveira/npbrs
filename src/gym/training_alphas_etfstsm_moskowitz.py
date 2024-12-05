@@ -9,6 +9,7 @@ import torch
 import multiprocessing
 import argparse
 import copy
+import resource
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
@@ -16,6 +17,11 @@ from estimators.DependentBootstrapSampling import DependentBootstrapSampling
 from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_strat_opt_results
+
+# Add this after the imports
+def limit_memory(max_mem_gb):
+    max_mem = max_mem_gb * 1024 * 1024 * 1024  # Convert GB to bytes
+    resource.setrlimit(resource.RLIMIT_AS, (max_mem, max_mem))
 
 class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
     def __init__(self,
@@ -270,7 +276,9 @@ if __name__ == "__main__":
     # define multiprocessing pool
     print(f"Running {strategy.sysname} with Utility {args.utility} in Parallel ...")
     utilities = []
-    with multiprocessing.Pool(processes=args.cpu_count, initializer=args.limit_memory) as pool:
+    with multiprocessing.Pool(processes=args.cpu_count, 
+                            initializer=limit_memory, 
+                            initargs=(args.memory_per_cpu,)) as pool:
         utilities = pool.map(objective, parameters_list)
 
     alphas = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
