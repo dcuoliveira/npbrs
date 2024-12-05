@@ -18,9 +18,8 @@ from functionals.Functionals import Functionals
 from portfolio_tools.Backtest import Backtest
 from utils.conn_data import load_pickle, save_strat_opt_results
 
-# Add this after the imports
 def limit_memory(max_mem_gb):
-    max_mem = max_mem_gb * 1024 * 1024 * 1024  # Convert GB to bytes
+    max_mem = int(max_mem_gb * 1024 * 1024 * 1024)  # Convert GB to bytes and cast to int
     resource.setrlimit(resource.RLIMIT_AS, (max_mem, max_mem))
 
 class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
