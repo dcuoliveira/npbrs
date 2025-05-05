@@ -249,7 +249,7 @@ if __name__ == "__main__":
     }
 
     # define parameters list for multiprocessing
-    windows = range(30, 377 + 1, 1)
+    windows = range(30, 377 + 1, 5)
     parameters_list = [
         {
             'strategy_params': strategy_params,
