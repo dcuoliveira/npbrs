@@ -104,10 +104,10 @@ class Backtest(Diagnostics):
                                 resample_freq=resample_freq)
         
         # compute vol scaling
-        vol_scale = (vol_target / self.vols_df).shift(-1)
+        vol_scale = (vol_target / self.vols_df).shift(1)
 
         # compute portfolio returns
-        self.portfolio_returns = (self.forecasts_df.shift(-1) * self.rets_df).fillna(0)
+        self.portfolio_returns = (self.forecasts_df * self.rets_df.shift(-1)).fillna(0)
 
         # compute scaled portfolio returns
         self.scaled_portfolio_returns = vol_scale * self.portfolio_returns
