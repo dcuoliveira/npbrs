@@ -23,7 +23,7 @@ class TSM:
         """
 
         # obtain the rolling mean of the returns of all assets in the past L days
-        momentum = returns.rolling(window=window).mean()
+        momentum = returns.rolling(window=window).mean().shift(1)
 
         return momentum
     
