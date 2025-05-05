@@ -9,7 +9,6 @@ import torch
 import multiprocessing
 import argparse
 import copy
-import resource
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
