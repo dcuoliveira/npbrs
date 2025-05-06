@@ -9,6 +9,7 @@ import torch
 import multiprocessing
 import argparse
 import copy
+from tqdm import tqdm
 
 from settings import INPUT_PATH, OUTPUT_PATH
 from signals.TSM import TSM
@@ -161,6 +162,30 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
                 bootrap_forecasts[f"bootstrap_{i}"] = forecasts
     
             return bootrap_forecasts
+
+    def build_signals_and_forecasts_from_bootstrap_samples(self, window: int):
+        bootrap_signals = {}
+        bootrap_forecasts = {}
+        for i in range(self.n_bootstrap_samples):
+            signals = {}
+            forecasts = {}
+            sample_df = pd.DataFrame(self.all_samples[i, :, :], columns=self.instruments, index=self.returns_info.index)
+            for instrument in self.instruments:
+
+                # build signals
+                signal = self.Moskowitz(returns=sample_df[[instrument]], window=window)
+                signals[instrument] = signal.rename(columns={instrument: self.bar_name})
+
+                # build forecasts
+                forecast = np.where(signals[instrument][[self.bar_name]] > 0, 1, -1)
+                forecasts[instrument] = pd.DataFrame(forecast,
+                                                     index=signals[instrument].index,
+                                                     columns=[self.bar_name])
+            
+            bootrap_signals[f"bootstrap_{i}"] = signals
+            bootrap_forecasts[f"bootstrap_{i}"] = forecasts
+
+        return bootrap_signals, bootrap_forecasts
     
 def objective(params):
     strategy_params = params['strategy_params']
@@ -178,11 +203,14 @@ def objective(params):
         utility=strategy_params['utility'],
         use_seed=strategy_params['use_seed'])
 
-    # for a given window, build signals from bootstrap samples
-    local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
+    # # for a given window, build signals from bootstrap samples
+    # local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
 
-    # build forecasts from bootstrap signals
-    local_strategy.bootstrap_forecasts_info = local_strategy.build_forecasts_from_bootstrap_signals()
+    # # build forecasts from bootstrap signals
+    # local_strategy.bootstrap_forecasts_info = local_strategy.build_forecasts_from_bootstrap_signals()
+
+    # build signals and forecasts from bootstrap samples
+    local_strategy.bootstrap_signals_info, local_strategy.bootstrap_forecasts_info = local_strategy.build_signals_and_forecasts_from_bootstrap_samples(window=window)
 
     # run backtest for each boostrap samples
     utilities_given_hyperparam = []
@@ -231,6 +259,16 @@ if __name__ == "__main__":
     if args.cpu_count == -1:
         args.cpu_count = multiprocessing.cpu_count() - 1
 
+    print("utility: ", args.utility)
+    print("functional: ", args.functional)
+    print("k: ", args.k)
+    print("cpu count: ", args.cpu_count)
+    print("start date: ", args.start_date)
+    print("train size: ", args.train_size)
+    print("use seed: ", args.use_seed)
+    print(" ")
+    print(" ")
+
     # define the parameters for strategy initialization
     strategy_params = {
             'start_date': args.start_date,
@@ -267,10 +305,14 @@ if __name__ == "__main__":
                                           train_size=strategy_params['train_size'])
 
     # define multiprocessing pool
-    print(f"Running {strategy.sysname} with Utility {args.utility} in Parallel ...")
     utilities = []
-    with multiprocessing.Pool(processes=args.cpu_count) as pool:
-        utilities = pool.map(objective, parameters_list)
+    # with multiprocessing.Pool(processes=args.cpu_count) as pool:
+    for param in tqdm(parameters_list, desc="Processing parameters ...", total=len(parameters_list)):
+        tmp_utilities = objective(param)
+        utilities.append(tmp_utilities)
+
+    print(" ")
+    print(" ")
 
     alphas = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
     for alpha in alphas:
