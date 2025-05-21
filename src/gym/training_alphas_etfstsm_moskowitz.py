@@ -187,21 +187,9 @@ class training_etfstsm_moskowitz(TSM, DependentBootstrapSampling, Functionals):
 
         return bootrap_signals, bootrap_forecasts
     
-def objective(params):
+def objective(params, local_strategy):
     strategy_params = params['strategy_params']
     window = params['window']
-
-    # Initialize strategy within each process
-    local_strategy = training_etfstsm_moskowitz(
-        vol_target=strategy_params['vol_target'],
-        bar_name=strategy_params['bar_name'],
-        train_size=strategy_params['train_size'],
-        boot_method=strategy_params['boot_method'],
-        Bsize=strategy_params['Bsize'],
-        k=strategy_params['k'],
-        alpha=strategy_params['alpha'],
-        utility=strategy_params['utility'],
-        use_seed=strategy_params['use_seed'])
 
     # # for a given window, build signals from bootstrap samples
     # local_strategy.bootstrap_signals_info = local_strategy.build_signals_from_bootstrap_samples(window=window)
@@ -302,13 +290,15 @@ if __name__ == "__main__":
                                           alpha=strategy_params['alpha'],
                                           utility=strategy_params['utility'],
                                           use_seed=strategy_params['use_seed'],
-                                          train_size=strategy_params['train_size'])
+                                          train_size=strategy_params['train_size'],
+                                          boot_method=strategy_params['boot_method'],
+                                          Bsize=strategy_params['Bsize'])
 
     # define multiprocessing pool
     utilities = []
     # with multiprocessing.Pool(processes=args.cpu_count) as pool:
-    for param in tqdm(parameters_list, desc="Processing parameters ...", total=len(parameters_list)):
-        tmp_utilities = objective(param)
+    for param in tqdm(parameters_list, desc="Processing parameters ...", total=len(parameters_list)):    
+        tmp_utilities = objective(param, strategy)
         utilities.append(tmp_utilities)
 
     print(" ")
