@@ -107,19 +107,9 @@ Blocks = create_circular_blocks(time_series, Bsize)
 # sample k paths of size time_series.shape[0] from the blocks
 sampled_paths = sample_many_paths(time_series, Bsize, Blocks, k)
 
-from tqdm import tqdm
-
-# define macd parameters
-parameters_list = [
-    [4, 8], [4, 12], [4, 24], [4, 48], [4, 96], [4, 192], [4, 384],
-    [8, 12], [8, 24], [8, 48], [8, 96], [8, 192], [8, 384],
-    [16, 24], [16, 48], [16, 96], [16, 192], [16, 384],
-    [32, 48], [32, 96], [32, 192], [16, 384]
-]
-
 # loop through the available parameters
 train_metrics = []
-for window in tqdm(parameters_list):
+for window in tqdm(range(5, 252 + (252 // 2) + 1, 1)):
 
     # loop through k sample paths
     for i in range(k):
@@ -128,9 +118,7 @@ for window in tqdm(parameters_list):
         boot_returns = pd.DataFrame(sampled_paths[i, :, :])
 
         # compute signal
-        short_window, long_window = window
-        ## compute the MACD signal
-        signal = boot_returns.ewm(span=short_window).mean() - boot_returns.ewm(span=long_window).mean()
+        signal = boot_returns.rolling(window=window).mean().shift(+1)
 
         # compute positions
         positions = signal.map(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
@@ -153,7 +141,7 @@ for window in tqdm(parameters_list):
 
         # compute relevant metrics
         metrics = {
-            'param': str(window),
+            'param': window,
             'boot_sample': i,
             'sharpe': portfolio_returns['portfolio'].mean() / portfolio_returns['portfolio'].std() * np.sqrt(252),
             'maxDD': max_drawdown,
@@ -162,9 +150,6 @@ for window in tqdm(parameters_list):
         # append results
         train_metrics.append(metrics)
 train_metrics_df = pd.DataFrame(train_metrics)
-
-# compute average Sharpe ratio for each parameter across all bootstrapped samples
-param_boot_sharpe_df = train_metrics_df[['param', 'sharpe', 'maxDD']].groupby('param').mean().sort_values(by='sharpe', ascending=False)
 
 # compute average Sharpe ratio for each parameter across all bootstrapped samples
 param_boot_sharpe_df = train_metrics_df[['param', 'sharpe', 'maxDD']].groupby('param').mean().sort_values(by='sharpe', ascending=False)
@@ -237,15 +222,15 @@ train_maxdd_params = {
 test_sharpe_metrics = []
 all_sharpe_portfolio_returns = []
 for name, window in train_sharpe_params.items():
+    window = eval(window)
+
     # extend the test set with the training set using window size
-    test_returns_extended = pd.concat([train_returns.tail(np.max(eval(window)).item()), test_returns])
+    test_returns_extended = pd.concat([train_returns.tail(window), test_returns])
     returns = pd.concat([train_returns, test_returns], axis=0)
 
     # compute signal
-    short_window, long_window = eval(window)
-    ## compute the MACD signal
-    test_signal = test_returns_extended.ewm(span=short_window).mean() - test_returns_extended.ewm(span=long_window).mean()
-    signal = returns.ewm(span=short_window).mean() - returns.ewm(span=long_window).mean()
+    test_signal = test_returns_extended.rolling(window=window).mean().shift(+1)
+    signal = returns.rolling(window=window).mean().shift(+1)
 
     # compute positions
     test_positions = test_signal.map(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
@@ -294,18 +279,19 @@ all_sharpe_portfolio_returns_df = pd.concat(all_sharpe_portfolio_returns, axis=1
 
 test_maxdd_metrics = []
 all_maxdd_portfolio_returns = []
-for name, window in train_maxdd_params.items():
+test_maxdd_metrics = []
+for name, window in train_sharpe_params.items():
+    window = eval(window)
+
     # extend the test set with the training set using window size
-    test_returns_extended = pd.concat([train_returns.tail(np.max(eval(window)).item()), test_returns])
+    test_returns_extended = pd.concat([train_returns.tail(window), test_returns])
     returns = pd.concat([train_returns, test_returns], axis=0)
 
     # compute signal
-    short_window, long_window = eval(window)
-    ## compute the MACD signal
-    test_signal = test_returns_extended.ewm(span=short_window).mean() - test_returns_extended.ewm(span=long_window).mean()
-    signal = returns.ewm(span=short_window).mean() - returns.ewm(span=long_window).mean()
+    test_signal = test_returns_extended.rolling(window=window).mean().shift(+1)
+    signal = returns.rolling(window=window).mean().shift(+1)
 
-    # compute positions
+     # compute positions
     test_positions = test_signal.map(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
     positions = signal.map(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
 
@@ -350,9 +336,6 @@ test_maxdd_metrics_df['gap'] = test_maxdd_metrics_df['maxDD_test'] - test_maxdd_
 # portfolio returns
 all_maxdd_portfolio_returns_df = pd.concat(all_maxdd_portfolio_returns, axis=1)
 
-# portfolio returns
-all_maxdd_portfolio_returns_df = pd.concat(all_maxdd_portfolio_returns, axis=1)
-
 
 plot_df = test_sharpe_metrics_df.copy()
 plot_df = plot_df.sort_values(by='name')
@@ -377,7 +360,7 @@ ax[1].legend()
 plt.xticks(rotation=45)
 plt.tight_layout()
 
-plt.savefig(os.path.join(outputs_path, 'results', f'{utility.lower()}-gap-utility-macd-mom.png'))
+plt.savefig(os.path.join(outputs_path, 'results', f'{utility.lower()}-gap-utility-moskowitz-mom.png'))
 
 # plt.show()
 
@@ -404,7 +387,7 @@ ax[1].legend()
 plt.xticks(rotation=45)
 plt.tight_layout()
 
-plt.savefig(os.path.join(outputs_path, 'results', f'{utility.lower()}-gap-utility-macd-mom.png'))
+plt.savefig(os.path.join(outputs_path, 'results', f'{utility.lower()}-gap-utility-moskowitz-mom.png'))
 
 # plt.show()
 
@@ -448,6 +431,6 @@ fig.legend(portfolio_handles,
            ncol=3)
 plt.tight_layout()
 
-plt.savefig(os.path.join(outputs_path, 'results', f'{utility.lower()}-cumret-macd-mom.png'), bbox_inches='tight')
+plt.savefig(os.path.join(outputs_path, 'results', f'{utility.lower()}-cumret-moskowitz-mom.png'), bbox_inches='tight')
 
 # plt.show()
