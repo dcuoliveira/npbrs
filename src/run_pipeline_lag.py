@@ -282,6 +282,8 @@ for name, window in train_sharpe_params.items():
 test_sharpe_metrics_df = pd.DataFrame(test_sharpe_metrics)
 test_sharpe_metrics_df['gap'] = test_sharpe_metrics_df['sharpe_test'] - test_sharpe_metrics_df['sharpe_train']
 
+print(test_sharpe_metrics_df.round(3).to_latex())
+
 # portfolio returns
 all_sharpe_portfolio_returns_df = pd.concat(all_sharpe_portfolio_returns, axis=1)
 
@@ -339,6 +341,8 @@ for name, window in train_maxdd_params.items():
 # metrics
 test_maxdd_metrics_df = pd.DataFrame(test_maxdd_metrics)
 test_maxdd_metrics_df['gap'] = test_maxdd_metrics_df['maxDD_test'] - test_maxdd_metrics_df['maxDD_train']
+
+print(test_maxdd_metrics_df.round(3).to_latex())
 
 # portfolio returns
 all_maxdd_portfolio_returns_df = pd.concat(all_maxdd_portfolio_returns, axis=1)
