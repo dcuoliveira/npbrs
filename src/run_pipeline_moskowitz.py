@@ -459,17 +459,29 @@ if __name__ == "__main__":
                     linewidth=lw,
                     alpha=alpha,
                     zorder=zorder)
-        ax.set_title(title)
-        ax.set_ylabel("Cum. Return (scaled)")
+        # ax.set_title(title)
+        # ax.set_ylabel("Cum. Return (scaled)")
         ax.grid(True, alpha=0.3)
+
+        for ax in [ax1, ax2]:
+            ax.tick_params(axis='x', labelsize=10)  # increase font size for x-axis
+            # ax.tick_params(axis='y', labelsize=11)  # optional, y-axis too
+
+    # select 90th, 50th, and 10th percentiles for train/test panels + ERM_max
+    train_cum = train_cum.loc[:,train_cum.columns.str.contains("90|50|10|ERM_max")]
+    test_cum = test_cum.loc[:,test_cum.columns.str.contains("90|50|10|ERM_max")]
 
     plot_panel(ax1, train_cum, "Train Period Cumulative Returns (rebased to 1)")
     plot_panel(ax2, test_cum, "Test Period Cumulative Returns (rebased to 1)")
 
     # ------------------ Single legend outside ------------------
     handles, labels = ax1.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center",
-            bbox_to_anchor=(0.5, -0.05), ncol=5, fontsize=9)
+    fig.legend(handles,
+               labels,
+               loc='lower center',
+               bbox_to_anchor=(0.5, -0.10),  # move legend lower
+               ncol=len(labels),             # all entries in one row
+               fontsize=13)
 
     # Save
     out = os.path.join(outputs_path, "results", f"cumret-{SIGNAL_NAME}.png")
