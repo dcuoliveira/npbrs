@@ -10,6 +10,8 @@ from typing import List, Tuple, Callable, Iterable
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
+from data.DatasetLoader import DatasetLoader
+
 # ============================================================
 #                    REPRO & GLOBALS
 # ============================================================
@@ -260,16 +262,46 @@ def plot_gap(df, metric_train, metric_test, gap_col, title, out_path):
 if __name__ == "__main__":
     # ------------------ Paths & IO ------------------
     SIGNAL_NAME = "tsmom_moskowitz_prod"
+    dataset_name = 'futures'
+    continuous_future_method = 'RAD'
     BASE_DIR = os.path.dirname(__file__)
     inputs_path = os.path.join(BASE_DIR, "data", "inputs")
     outputs_path = os.path.join(BASE_DIR, "data", "outputs")
     os.makedirs(os.path.join(outputs_path, "results"), exist_ok=True)
 
-    instruments = [
-        "SPY","IWM","EEM","TLT","USO","GLD",
-        "XLF","XLB","XLK","XLV","XLI","XLU","XLY",
-        "XLP","XLE","AGG","DBC","HYG","LQD","UUP"
-    ]
+    SIGNAL_NAME = f"{SIGNAL_NAME}_{dataset_name}"
+
+    ds_builder = DatasetLoader(
+            flds={
+                # commodities
+                # 'ZH': ['close'], HEATING OIL has zero prices until 2020
+                # 'NR': ['close'], no data starting from 2021
+                'CC': ['close'], 'DA': ['close'], 'GI': ['close'], 'JO': ['close'], 'KC': ['close'], 'KW': ['close'],
+                'LB': ['close'], 'SB': ['close'], 'ZC': ['close'], 'ZF': ['close'], 'ZZ': ['close'],
+                'ZG': ['close'], 'ZI': ['close'], 'ZK': ['close'], 'ZL': ['close'], 'ZN': ['close'],
+                'ZO': ['close'], 'ZP': ['close'], 'ZR': ['close'], 'ZT': ['close'], 'ZU': ['close'], 'ZW': ['close'],
+                
+                # bonds
+                # 'EC': ['close'], no data starting from 2021
+                'CB': ['close'], 'DT': ['close'], 'FB': ['close'], 'GS': ['close'], 'TU': ['close'], 
+                'TY': ['close'], 'UB': ['close'], 'US': ['close'], 'UZ': ['close'], 
+                
+                # fx
+                'AN': ['close'], 'CN': ['close'], 'BN': ['close'], 'DX': ['close'], 'JN': ['close'], 
+                'MP': ['close'], 'SN': ['close'],
+
+                # equities
+                # 'SP': ['close'] == 'SC': ['close'] == 'ES': ['close'] == S&P500
+                'FN': ['close'], 'NK': ['close'], 'ZA': ['close'], 'CA': ['close'], 'EN': ['close'], 'ER': ['close'], 'ES': ['close'],
+                'LX': ['close'], 'MD': ['close'], 'XU': ['close'], 'XX': ['close'], 'YM': ['close'],
+        }
+    )
+
+    data = ds_builder.load_data(
+        dataset_name=dataset_name,
+        continuous_future_method=continuous_future_method,
+    )
+    returns = data.pct_change().dropna()
 
     # Auto workers: leave one CPU free
     N_JOBS = max(1, os.cpu_count() - 1)
@@ -286,11 +318,6 @@ if __name__ == "__main__":
     # UTILITY_FN = util_sortino_scaled
     # UTILITY_FN = util_neg_maxdd_scaled
     # UTILITY_FN = lambda bt: util_combo(bt, alpha=1.0, beta=2.0)
-
-    df = pd.read_csv(os.path.join(inputs_path, "sample", "etfs.csv"), sep=";")
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.set_index("date")[instruments].resample("B").ffill().dropna()
-    returns = df.pct_change().dropna()
 
     # ------------------ Train / Test split ------------------
     split_idx = int(len(returns) * 0.80)
