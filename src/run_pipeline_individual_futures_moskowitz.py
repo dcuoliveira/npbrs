@@ -264,7 +264,7 @@ if __name__ == "__main__":
 
     args = argparse.ArgumentParser()
     args.add_argument('--signal', type=str, default='tsmom_moskowitz_prod', help='Signal name')
-    args.add_argument('--dataset', type=str, default='futures', help='Dataset name')
+    args.add_argument('--dataset', type=str, default='futures', help='Dataset name', choices=['futures', 'etfs'])
     args.add_argument('--utility', type=str, default='Sharpe', help='Utility name: Sharpe, Sortino, MaxDD')
     args.add_argument('--method', type=str, default='RAD', help='Continuous future method')
     args.add_argument('--n_boot_samples', type=int, default=1000, help='Number of bootstrap samples')
@@ -291,37 +291,49 @@ if __name__ == "__main__":
 
     SIGNAL_NAME = f"{SIGNAL_NAME}_{dataset_name}_{utility_name}"
 
-    ds_builder = DatasetLoader(
-            flds={
-                # commodities
-                # 'ZH': ['close'], HEATING OIL has zero prices until 2020
-                # 'NR': ['close'], no data starting from 2021
-                'CC': ['close'], 'DA': ['close'], 'GI': ['close'], 'JO': ['close'], 'KC': ['close'], 'KW': ['close'],
-                'LB': ['close'], 'SB': ['close'], 'ZC': ['close'], 'ZF': ['close'], 'ZZ': ['close'],
-                'ZG': ['close'], 'ZI': ['close'], 'ZK': ['close'], 'ZL': ['close'], 'ZN': ['close'],
-                'ZO': ['close'], 'ZP': ['close'], 'ZR': ['close'], 'ZT': ['close'], 'ZU': ['close'], 'ZW': ['close'],
-                
-                # bonds
-                # 'EC': ['close'], no data starting from 2021
-                'CB': ['close'], 'DT': ['close'], 'FB': ['close'], 'GS': ['close'], 'TU': ['close'], 
-                'TY': ['close'], 'UB': ['close'], 'US': ['close'], 'UZ': ['close'], 
-                
-                # fx
-                'AN': ['close'], 'CN': ['close'], 'BN': ['close'], 'DX': ['close'], 'JN': ['close'], 
-                'MP': ['close'], 'SN': ['close'],
+    if dataset_name == 'futures':
+        ds_builder = DatasetLoader(
+                flds={
+                    # commodities
+                    # 'ZH': ['close'], HEATING OIL has zero prices until 2020
+                    # 'NR': ['close'], no data starting from 2021
+                    'CC': ['close'], 'DA': ['close'], 'GI': ['close'], 'JO': ['close'], 'KC': ['close'], 'KW': ['close'],
+                    'LB': ['close'], 'SB': ['close'], 'ZC': ['close'], 'ZF': ['close'], 'ZZ': ['close'],
+                    'ZG': ['close'], 'ZI': ['close'], 'ZK': ['close'], 'ZL': ['close'], 'ZN': ['close'],
+                    'ZO': ['close'], 'ZP': ['close'], 'ZR': ['close'], 'ZT': ['close'], 'ZU': ['close'], 'ZW': ['close'],
+                    
+                    # bonds
+                    # 'EC': ['close'], no data starting from 2021
+                    'CB': ['close'], 'DT': ['close'], 'FB': ['close'], 'GS': ['close'], 'TU': ['close'], 
+                    'TY': ['close'], 'UB': ['close'], 'US': ['close'], 'UZ': ['close'], 
+                    
+                    # fx
+                    'AN': ['close'], 'CN': ['close'], 'BN': ['close'], 'DX': ['close'], 'JN': ['close'], 
+                    'MP': ['close'], 'SN': ['close'],
 
-                # equities
-                # 'SP': ['close'] == 'SC': ['close'] == 'ES': ['close'] == S&P500
-                'FN': ['close'], 'NK': ['close'], 'ZA': ['close'], 'CA': ['close'], 'EN': ['close'], 'ER': ['close'], 'ES': ['close'],
-                'LX': ['close'], 'MD': ['close'], 'XU': ['close'], 'XX': ['close'], 'YM': ['close'],
-        }
-    )
+                    # equities
+                    # 'SP': ['close'] == 'SC': ['close'] == 'ES': ['close'] == S&P500
+                    'FN': ['close'], 'NK': ['close'], 'ZA': ['close'], 'CA': ['close'], 'EN': ['close'], 'ER': ['close'], 'ES': ['close'],
+                    'LX': ['close'], 'MD': ['close'], 'XU': ['close'], 'XX': ['close'], 'YM': ['close'],
+            }
+        )
 
-    data = ds_builder.load_data(
-        dataset_name=dataset_name,
-        continuous_future_method=continuous_future_method,
-    )
-    returns = data.pct_change().dropna()
+        data = ds_builder.load_data(
+            dataset_name=dataset_name,
+            continuous_future_method=continuous_future_method,
+        )
+        returns = data.pct_change().dropna()
+    elif dataset_name == 'etfs':
+        instruments = [
+            "SPY","IWM","EEM","TLT","USO","GLD",
+            "XLF","XLB","XLK","XLV","XLI","XLU","XLY",
+            "XLP","XLE","AGG","DBC","HYG","LQD","UUP"
+        ]
+
+        df = pd.read_csv(os.path.join(inputs_path, "sample", "etfs.csv"), sep=";")
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.set_index("date")[instruments].resample("B").ffill().dropna()
+        returns = df.pct_change().dropna()
 
     # Choose in-sample utility for ERM baseline
     if utility_name == 'Sharpe':
