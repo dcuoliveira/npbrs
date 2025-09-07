@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from typing import List, Tuple, Callable, Iterable
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-import argparse
+from sklearn.model_selection import TimeSeriesSplit
 
 from data.DatasetLoader import DatasetLoader
 
@@ -195,6 +195,43 @@ def _eval_param_single(param: int,
         util = -np.inf
     return int(param), float(util)
 
+def _eval_param_cv_single(param: int,
+                          train_returns: pd.DataFrame,
+                          signal_fn: Callable[[pd.DataFrame, int], pd.DataFrame],
+                          utility_fn: Callable[[pd.DataFrame], float],
+                          n_splits: int = 5,
+                          max_train_size: int | None = None,
+                          gap: int = 0) -> Tuple[int, float]:
+    """
+    Cross-validated evaluation of one parameter using sklearn's TimeSeriesSplit.
+
+    For each split:
+      - Build positions using ONLY data up to the end of the validation fold (no look-ahead).
+      - Backtest on the same sub-sample.
+      - Compute utility on the VALIDATION slice only.
+    Returns (param, mean_utility_across_folds).
+    """
+    if len(train_returns) < n_splits + 2:
+        return int(param), float("-inf")
+
+    tscv = TimeSeriesSplit(n_splits=n_splits, max_train_size=max_train_size, gap=gap)
+    utils: list[float] = []
+
+    for _, val_idx in tscv.split(train_returns):
+        val_rets = train_returns.iloc[val_idx].copy()
+
+        # Apply parameter to VALIDATION slice only
+        pos_val = signal_fn(val_rets, int(param))
+        bt_val  = backtest_positions(val_rets, pos_val)  # yields 'portfolio' & 'portfolio_scaled'
+
+        util = utility_fn(bt_val)
+        if util is None or not np.isfinite(util):
+            util = float("-inf")
+        utils.append(float(util))
+
+    avg_util = float(np.nanmean(utils)) if utils else float("-inf")
+    return int(param), avg_util
+
 def select_param_empirical_parallel(train_returns: pd.DataFrame,
                                     param_trials: Iterable[int],
                                     signal_fn: Callable[[pd.DataFrame, int], pd.DataFrame],
@@ -207,7 +244,8 @@ def select_param_empirical_parallel(train_returns: pd.DataFrame,
     Executor = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
     best_param, best_util = None, -np.inf
     with Executor(max_workers=n_jobs) as ex:
-        futs = [ex.submit(_eval_param_single, int(p), train_returns, signal_fn, utility_fn) for p in param_trials]
+        # futs = [ex.submit(_eval_param_single, int(p), train_returns, signal_fn, utility_fn) for p in param_trials]
+        futs = [ex.submit(_eval_param_cv_single, int(p), train_returns, signal_fn, utility_fn) for p in param_trials]
         for fut in as_completed(futs):
             param, util = fut.result()
             if util > best_util:
@@ -261,35 +299,16 @@ def plot_gap(df, metric_train, metric_test, gap_col, title, out_path):
 #                           RUNNER
 # ============================================================
 if __name__ == "__main__":
-
-    args = argparse.ArgumentParser()
-    args.add_argument('--signal', type=str, default='tsmom_moskowitz_prod', help='Signal name')
-    args.add_argument('--dataset', type=str, default='futures', help='Dataset name')
-    args.add_argument('--utility', type=str, default='Sharpe', help='Utility name: Sharpe, Sortino, MaxDD')
-    args.add_argument('--method', type=str, default='RAD', help='Continuous future method')
-    args.add_argument('--n_boot_samples', type=int, default=1000, help='Number of bootstrap samples')
-    args.add_argument('--block_size', type=int, default=10, help='Block size for bootstrap')
-    parsed = args.parse_args()
-
     # ------------------ Paths & IO ------------------
-    SIGNAL_NAME = parsed.signal
-    dataset_name = parsed.dataset
-    utility_name = parsed.utility
-    continuous_future_method = parsed.method
-    N_JOBS = max(1, os.cpu_count() - 1)
-
-    tot = 252
-    PARAM_TRIALS = list(range(5, tot + (tot // 2) + 1, 1))
-    K_BOOT = parsed.n_boot_samples
-    BLOCK_SIZE = parsed.block_size
-    PICKS = ["max", 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
-
+    SIGNAL_NAME = "tsmom_moskowitz_prod"
+    dataset_name = 'futures'
+    continuous_future_method = 'RAD'
     BASE_DIR = os.path.dirname(__file__)
     inputs_path = os.path.join(BASE_DIR, "data", "inputs")
     outputs_path = os.path.join(BASE_DIR, "data", "outputs")
     os.makedirs(os.path.join(outputs_path, "results"), exist_ok=True)
 
-    SIGNAL_NAME = f"{SIGNAL_NAME}_{dataset_name}_{utility_name}"
+    SIGNAL_NAME = f"{SIGNAL_NAME}_{dataset_name}_cv"
 
     ds_builder = DatasetLoader(
             flds={
@@ -323,267 +342,217 @@ if __name__ == "__main__":
     )
     returns = data.pct_change().dropna()
 
+    # Auto workers: leave one CPU free
+    N_JOBS = max(1, os.cpu_count() - 1)
+
+    # Candidate lookbacks
+    tot = 252
+    PARAM_TRIALS = list(range(5, tot + (tot // 2) + 1, 1))
+    K_BOOT = 1000
+    BLOCK_SIZE = 10
+    PICKS = ["max", 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
+
     # Choose in-sample utility for ERM baseline
-    if utility_name == 'Sharpe':
-        UTILITY_FN = util_sharpe_scaled
-    elif utility_name == 'Sortino':
-        UTILITY_FN = util_sortino_scaled
-    elif utility_name == 'MaxDD':
-        UTILITY_FN = util_neg_maxdd_scaled
-    else:
-        raise ValueError(f"Unknown utility_name: {utility_name}")
+    UTILITY_FN = util_sharpe_scaled
+    # UTILITY_FN = util_sortino_scaled
+    # UTILITY_FN = util_neg_maxdd_scaled
+    # UTILITY_FN = lambda bt: util_combo(bt, alpha=1.0, beta=2.0)
 
     # ------------------ Train / Test split ------------------
-    all_results = []
-    for colname in tqdm(returns.columns, desc="Processing assets..."):
-        individual_returns = returns[[colname]].copy().dropna()
+    split_idx = int(len(returns) * 0.80)
+    train_returns = returns.iloc[:split_idx].copy()
+    test_returns  = returns.iloc[split_idx:].copy()
+    full_returns  = returns.copy()
 
-        split_idx = int(len(individual_returns) * 0.80)
-        train_returns = individual_returns.iloc[:split_idx].copy()
-        test_returns  = individual_returns.iloc[split_idx:].copy()
-        full_returns  = individual_returns.copy()
+    # ------------------ Experiment Config -------------------
+    signal_fn = signal_fn_prod  # picklable
 
-        # ------------------ Experiment Config -------------------
-        signal_fn = signal_fn_prod  # picklable
+    # Bootstrap once (built on train only)
+    bootstrap_paths = build_bootstrap_paths_df(train_returns, BLOCK_SIZE, K_BOOT, seed_base=RNG_SEED)
 
-        # Bootstrap once (built on train only)
-        bootstrap_paths = build_bootstrap_paths_df(train_returns, BLOCK_SIZE, K_BOOT, seed_base=RNG_SEED)
-
-        # ------------------ Bootstrap selection table (parallel) ------------------
-        boot_df = select_params_via_bootstrap_parallel(
-            bootstrap_paths,
-            PARAM_TRIALS,
-            signal_fn=signal_fn,
-            n_jobs=N_JOBS,
-            backend="process"
-        )
-
-        # Pick parameters by ranked percentiles of bootstrap Sharpe
-        selected_params = {}
-        for q in PICKS:
-            name = str(q) if isinstance(q, str) else f"{int(q*100)}th"
-            selected_params[name] = pick_percentile_param(boot_df, q)
-
-        # ------------------ Baseline ERM (parallel) ------------------
-        L_emp, _ = select_param_empirical_parallel(
-            train_returns,
-            param_trials=PARAM_TRIALS,
-            signal_fn=signal_fn,
-            utility_fn=UTILITY_FN,
-            n_jobs=N_JOBS,
-            backend="process"
-        )
-        selected_params["ERM_max"] = L_emp
-
-        # ---- Desired, fixed display/evaluation order ----
-        DESIRED_ORDER = [f"{p}th" for p in (10,20,30,40,50,60,70,80,90)] + ["max", "ERM_max"]
-        ordered_names = [n for n in DESIRED_ORDER if n in selected_params]
-
-        # ------------------ Evaluate train/test IN THIS ORDER ------------------
-        records = []
-        cumret_panels = {}
-        train_len = len(train_returns)
-
-        for name in ordered_names:
-            L = selected_params[name]
-            # Train
-            pos_tr = signal_fn(train_returns, L)
-            bt_tr = backtest_positions(train_returns, pos_tr)
-            # Test (build positions on full series, slice to test)
-            bt_te = apply_param_to_test(full_returns, train_len, L, signal_fn)
-
-            # Metrics on scaled series
-            m_tr = metrics(bt_tr["portfolio_scaled"])
-            m_te = metrics(bt_te["portfolio_scaled"])
-
-            records.append({
-                "name": name, "param": L,
-                "Sharpe_train": m_tr["Sharpe"], "Sharpe_test": m_te["Sharpe"],
-                "Gap_Sharpe": m_te["Sharpe"] - m_tr["Sharpe"],
-                "Sortino_train": m_tr["Sortino"], "Sortino_test": m_te["Sortino"],
-                "Gap_Sortino": m_te["Sortino"] - m_tr["Sortino"],
-                "MaxDD_train": m_tr["MaxDD"], "MaxDD_test": m_te["MaxDD"],
-                "Gap_MaxDD": m_te["MaxDD"] - m_tr["MaxDD"],
-                "AvgDD_train": m_tr["AvgDD"], "AvgDD_test": m_te["AvgDD"],
-                "Gap_AvgDD": m_te["AvgDD"] - m_tr["AvgDD"],
-            })
-
-            # Continuous full-sample cum-returns (scaled) for plotting
-            full_pos = signal_fn(full_returns, L)
-            full_bt  = backtest_positions(full_returns, full_pos)
-            cum = (1 + full_bt["portfolio_scaled"]).cumprod()
-            cumret_panels[f"{name}_{L}"] = cum
-
-        # Build DataFrame and lock the categorical order for plotting/printing
-        results_df = pd.DataFrame(records)
-        results_df["name"] = pd.Categorical(results_df["name"],
-                                            categories=ordered_names,
-                                            ordered=True)
-        results_df = results_df.sort_values("name").reset_index(drop=True)
-        results_df['asset'] = colname
-        all_results.append(results_df)
-    all_results_df = pd.concat(all_results, ignore_index=True)
-
-    print("\n=== Parameter selections & metrics ===")
-
-    # Save CSV
-    results_path = os.path.join(outputs_path, "results", f"{SIGNAL_NAME}_individual_bootstrap_selection.csv")
-    all_results_df.to_csv(results_path, index=False)
-
-    # function to compute CI for a series
-    def ci_normal(series, alpha=0.05):
-        n = series.count()
-        mean = series.mean()
-        se = series.std(ddof=1) / np.sqrt(n)
-        z = 1.96  # 95%
-        lower = mean - z * se
-        upper = mean + z * se
-        return pd.Series({'mean': mean, 'lower': lower, 'upper': upper})
-
-    filtered_all_results_df = all_results_df.loc[all_results_df['name'] != 'max']
-
-    # apply per group
-    ci_df = filtered_all_results_df.groupby('name')[[f'{utility_name}_train', f'{utility_name}_test', f'Gap_{utility_name}']].apply(
-        lambda df: df.apply(ci_normal)
+    # ------------------ Bootstrap selection table (parallel) ------------------
+    boot_df = select_params_via_bootstrap_parallel(
+        bootstrap_paths,
+        PARAM_TRIALS,
+        signal_fn=signal_fn,
+        n_jobs=N_JOBS,
+        backend="process"
     )
 
-    # Slice rows by the 2nd index level
-    ci_mean  = ci_df.xs('mean',  level=1)   # rows: name ; cols: metrics
-    ci_lower = ci_df.xs('lower', level=1)
-    ci_upper = ci_df.xs('upper', level=1)
+    # Pick parameters by ranked percentiles of bootstrap Sharpe
+    selected_params = {}
+    for q in PICKS:
+        name = str(q) if isinstance(q, str) else f"{int(q*100)}th"
+        selected_params[name] = pick_percentile_param(boot_df, q)
 
-    metrics = [f'{utility_name}_train', f'{utility_name}_test', f'Gap_{utility_name}']
-    titles  = [f'{utility_name.capitalize()} Train (95% CI)', f'{utility_name.capitalize()} Test (95% CI)', f'Gap {utility_name.capitalize()} (95% CI)']
+    # ------------------ Baseline ERM (parallel) ------------------
+    L_emp, _ = select_param_empirical_parallel(
+        train_returns,
+        param_trials=PARAM_TRIALS,
+        signal_fn=signal_fn,
+        utility_fn=UTILITY_FN,
+        n_jobs=N_JOBS,
+        backend="process"
+    )
+    selected_params["ERM_max"] = L_emp
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 12), sharex=True)
+    # ---- Desired, fixed display/evaluation order ----
+    DESIRED_ORDER = [f"{p}th" for p in (10,20,30,40,50,60,70,80,90)] + ["max", "ERM_max"]
+    ordered_names = [n for n in DESIRED_ORDER if n in selected_params]
 
-    for ax, metric, title in zip(axes, metrics, titles):
-        means  = ci_mean[metric]
-        lowers = ci_lower[metric]
-        uppers = ci_upper[metric]
+    # ------------------ Evaluate train/test IN THIS ORDER ------------------
+    records = []
+    cumret_panels = {}
+    train_len = len(train_returns)
 
-        ax.errorbar(
-            means.index, means.values,
-            yerr=[(means - lowers).values, (uppers - means).values],
-            fmt='o', capsize=5,
-        )
-        ax.set_ylabel(title)
+    for name in ordered_names:
+        L = selected_params[name]
+        # Train
+        pos_tr = signal_fn(train_returns, L)
+        bt_tr = backtest_positions(train_returns, pos_tr)
+        # Test (build positions on full series, slice to test)
+        bt_te = apply_param_to_test(full_returns, train_len, L, signal_fn)
+
+        # Metrics on scaled series
+        m_tr = metrics(bt_tr["portfolio_scaled"])
+        m_te = metrics(bt_te["portfolio_scaled"])
+
+        records.append({
+            "name": name, "param": L,
+            "Sharpe_train": m_tr["Sharpe"], "Sharpe_test": m_te["Sharpe"],
+            "Gap_Sharpe": m_te["Sharpe"] - m_tr["Sharpe"],
+            "Sortino_train": m_tr["Sortino"], "Sortino_test": m_te["Sortino"],
+            "Gap_Sortino": m_te["Sortino"] - m_tr["Sortino"],
+            "MaxDD_train": m_tr["MaxDD"], "MaxDD_test": m_te["MaxDD"],
+            "Gap_MaxDD": m_te["MaxDD"] - m_tr["MaxDD"],
+            "AvgDD_train": m_tr["AvgDD"], "AvgDD_test": m_te["AvgDD"],
+            "Gap_AvgDD": m_te["AvgDD"] - m_tr["AvgDD"],
+        })
+
+        # Continuous full-sample cum-returns (scaled) for plotting
+        full_pos = signal_fn(full_returns, L)
+        full_bt  = backtest_positions(full_returns, full_pos)
+        cum = (1 + full_bt["portfolio_scaled"]).cumprod()
+        cumret_panels[f"{name}_{L}"] = cum
+
+    # Build DataFrame and lock the categorical order for plotting/printing
+    results_df = pd.DataFrame(records)
+    results_df["name"] = pd.Categorical(results_df["name"],
+                                        categories=ordered_names,
+                                        ordered=True)
+    results_df = results_df.sort_values("name").reset_index(drop=True)
+
+    print("\n=== Parameter selections & metrics ===")
+    print(results_df.round(3).to_string(index=False))
+
+    # Save CSV
+    results_path = os.path.join(outputs_path, "results", f"{SIGNAL_NAME}_bootstrap_selection.csv")
+    results_df.to_csv(results_path, index=False)
+
+    # ------------------ Plots ------------------
+    def plot_gap_local(df, metric_train, metric_test, gap_col, title, fname):
+        x = df["name"].values
+        fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True, constrained_layout=True)
+
+        ax[0].plot(x, df[metric_train], marker="o", label="Train")
+        ax[0].plot(x, df[metric_test], marker="o", label="Test")
+        ax[0].set_ylabel(title)
+        ax[0].grid(True, alpha=0.3)
+        ax[0].legend()
+
+        ax[1].plot(x, df[gap_col], marker="o", label="Generalization Gap")
+        ax[1].set_xlabel("Selection")
+        ax[1].set_ylabel("Gap")
+        ax[1].grid(True, alpha=0.3)
+        ax[1].legend()
+
+        plt.xticks(rotation=30)
+        out = os.path.join(outputs_path, "results", fname)
+        fig.savefig(out, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+
+    # Generalization gap: Sharpe / Sortino / MaxDD / AvgDD
+    plot_gap_local(results_df, "Sharpe_train",  "Sharpe_test",  "Gap_Sharpe",  "Sharpe Ratio",         f"sharpe-gap-{SIGNAL_NAME}.png")
+    plot_gap_local(results_df, "Sortino_train", "Sortino_test", "Gap_Sortino", "Sortino Ratio",        f"sortino-gap-{SIGNAL_NAME}.png")
+    plot_gap_local(results_df, "MaxDD_train",   "MaxDD_test",   "Gap_MaxDD",   "Max Drawdown (%)",     f"maxdd-gap-{SIGNAL_NAME}.png")
+    plot_gap_local(results_df, "AvgDD_train",   "AvgDD_test",   "Gap_AvgDD",   "Average Drawdown (%)", f"avgdd-gap-{SIGNAL_NAME}.png")
+
+    # ------------------ Cumulative returns: Train vs Test panels (each starts at 1) ------------------
+    cum_df = pd.DataFrame(cumret_panels)  # full-sample cumrets (scaled) for each selection
+    test_start = test_returns.index[0]
+    train_start = train_returns.index[0]
+
+    # 1) TRAIN: rebuild incremental cumulative return from the underlying *daily* scaled returns
+    # Convert cum_df back to daily scaled returns (r_t = C_t / C_{t-1} - 1), then recompute
+    daily_rets = cum_df.pct_change().fillna(0.0)
+
+    # Train cumulative returns: only use train window and rebase to 1 at train_start
+    train_rets = daily_rets.loc[train_start:test_start].dropna()
+    train_cum = (1.0 + train_rets).cumprod()
+    # Ensure exact 1.0 at the first row
+    if not train_cum.empty:
+        train_cum = train_cum / train_cum.iloc[0]
+
+    # 2) TEST: only use returns from test_start onward and rebase to 1 at test_start
+    test_rets = daily_rets.loc[test_start:].dropna()
+    test_cum = (1.0 + test_rets).cumprod()
+    if not test_cum.empty:
+        test_cum = test_cum / test_cum.iloc[0]
+
+    # Plot
+    # ------------------ Distinct colors ------------------
+    palette = plt.get_cmap('tab20').colors  # 20 high-contrast colors
+    color_map = {}
+    for i, colname in enumerate(cum_df.columns):
+        color_map[colname] = palette[i % len(palette)]
+
+    # ------------------ Build plots ------------------
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 6), constrained_layout=True)
+
+    def plot_panel(ax, data, title):
+        for col in data.columns:
+            lw = 1.5
+            zorder = 1
+            alpha = 0.9
+            # Highlight ERM_max
+            if col.startswith("ERM_max"):
+                lw = 2.5
+                zorder = 3
+                alpha = 1.0
+            ax.plot(data.index, data[col],
+                    label=col,
+                    color=color_map[col],
+                    linewidth=lw,
+                    alpha=alpha,
+                    zorder=zorder)
         # ax.set_title(title)
-        ax.legend()
+        ax.set_ylabel("Cumulative Return")
+        # ax.grid(True, alpha=0.3)
 
-    plt.xticks(rotation=90)
-    plt.tight_layout()
-    out = os.path.join(outputs_path, "results", f"cis-{SIGNAL_NAME}.png")
+        for ax in [ax1, ax2]:
+            ax.tick_params(axis='x', labelsize=10)  # increase font size for x-axis
+            # ax.tick_params(axis='y', labelsize=11)  # optional, y-axis too
+
+    # select 90th, 50th, and 10th percentiles for train/test panels + ERM_max
+    train_cum = train_cum.loc[:,train_cum.columns.str.contains("90|50|10|ERM_max")]
+    test_cum = test_cum.loc[:,test_cum.columns.str.contains("90|50|10|ERM_max")]
+
+    plot_panel(ax1, train_cum, "Train Period Cumulative Returns (rebased to 1)")
+    plot_panel(ax2, test_cum, "Test Period Cumulative Returns (rebased to 1)")
+
+    # ------------------ Single legend outside ------------------
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles,
+               labels,
+               loc='lower center',
+               bbox_to_anchor=(0.5, -0.10),  # move legend lower
+               ncol=len(labels),             # all entries in one row
+               fontsize=13)
+
+    # Save
+    out = os.path.join(outputs_path, "results", f"cumret-{SIGNAL_NAME}.png")
     fig.savefig(out, bbox_inches="tight", dpi=150)
     plt.close(fig)
 
     print(f"\nSaved: {results_path}")
     print("Saved plots to:", os.path.join(outputs_path, "results"))
-
-    # # ------------------ Plots ------------------
-    # def plot_gap_local(df, metric_train, metric_test, gap_col, title, fname):
-    #     x = df["name"].values
-    #     fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True, constrained_layout=True)
-
-    #     ax[0].plot(x, df[metric_train], marker="o", label="Train")
-    #     ax[0].plot(x, df[metric_test], marker="o", label="Test")
-    #     ax[0].set_ylabel(title)
-    #     ax[0].grid(True, alpha=0.3)
-    #     ax[0].legend()
-
-    #     ax[1].plot(x, df[gap_col], marker="o", label="Generalization Gap")
-    #     ax[1].set_xlabel("Selection")
-    #     ax[1].set_ylabel("Gap")
-    #     ax[1].grid(True, alpha=0.3)
-    #     ax[1].legend()
-
-    #     plt.xticks(rotation=30)
-    #     out = os.path.join(outputs_path, "results", fname)
-    #     fig.savefig(out, bbox_inches="tight", dpi=150)
-    #     plt.close(fig)
-
-    # # Generalization gap: Sharpe / Sortino / MaxDD / AvgDD
-    # plot_gap_local(results_df, "Sharpe_train",  "Sharpe_test",  "Gap_Sharpe",  "Sharpe Ratio",         f"sharpe-gap-{SIGNAL_NAME}.png")
-    # plot_gap_local(results_df, "Sortino_train", "Sortino_test", "Gap_Sortino", "Sortino Ratio",        f"sortino-gap-{SIGNAL_NAME}.png")
-    # plot_gap_local(results_df, "MaxDD_train",   "MaxDD_test",   "Gap_MaxDD",   "Max Drawdown (%)",     f"maxdd-gap-{SIGNAL_NAME}.png")
-    # plot_gap_local(results_df, "AvgDD_train",   "AvgDD_test",   "Gap_AvgDD",   "Average Drawdown (%)", f"avgdd-gap-{SIGNAL_NAME}.png")
-
-    # # ------------------ Cumulative returns: Train vs Test panels (each starts at 1) ------------------
-    # cum_df = pd.DataFrame(cumret_panels)  # full-sample cumrets (scaled) for each selection
-    # test_start = test_returns.index[0]
-    # train_start = train_returns.index[0]
-
-    # # 1) TRAIN: rebuild incremental cumulative return from the underlying *daily* scaled returns
-    # # Convert cum_df back to daily scaled returns (r_t = C_t / C_{t-1} - 1), then recompute
-    # daily_rets = cum_df.pct_change().fillna(0.0)
-
-    # # Train cumulative returns: only use train window and rebase to 1 at train_start
-    # train_rets = daily_rets.loc[train_start:test_start].dropna()
-    # train_cum = (1.0 + train_rets).cumprod()
-    # # Ensure exact 1.0 at the first row
-    # if not train_cum.empty:
-    #     train_cum = train_cum / train_cum.iloc[0]
-
-    # # 2) TEST: only use returns from test_start onward and rebase to 1 at test_start
-    # test_rets = daily_rets.loc[test_start:].dropna()
-    # test_cum = (1.0 + test_rets).cumprod()
-    # if not test_cum.empty:
-    #     test_cum = test_cum / test_cum.iloc[0]
-
-    # # Plot
-    # # ------------------ Distinct colors ------------------
-    # palette = plt.get_cmap('tab20').colors  # 20 high-contrast colors
-    # color_map = {}
-    # for i, colname in enumerate(cum_df.columns):
-    #     color_map[colname] = palette[i % len(palette)]
-
-    # # ------------------ Build plots ------------------
-    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 6), constrained_layout=True)
-
-    # def plot_panel(ax, data, title):
-    #     for col in data.columns:
-    #         lw = 1.5
-    #         zorder = 1
-    #         alpha = 0.9
-    #         # Highlight ERM_max
-    #         if col.startswith("ERM_max"):
-    #             lw = 2.5
-    #             zorder = 3
-    #             alpha = 1.0
-    #         ax.plot(data.index, data[col],
-    #                 label=col,
-    #                 color=color_map[col],
-    #                 linewidth=lw,
-    #                 alpha=alpha,
-    #                 zorder=zorder)
-    #     # ax.set_title(title)
-    #     ax.set_ylabel("Cumulative Return")
-    #     # ax.grid(True, alpha=0.3)
-
-    #     for ax in [ax1, ax2]:
-    #         ax.tick_params(axis='x', labelsize=10)  # increase font size for x-axis
-    #         # ax.tick_params(axis='y', labelsize=11)  # optional, y-axis too
-
-    # # select 90th, 50th, and 10th percentiles for train/test panels + ERM_max
-    # train_cum = train_cum.loc[:,train_cum.columns.str.contains("90|50|10|ERM_max")]
-    # test_cum = test_cum.loc[:,test_cum.columns.str.contains("90|50|10|ERM_max")]
-
-    # plot_panel(ax1, train_cum, "Train Period Cumulative Returns (rebased to 1)")
-    # plot_panel(ax2, test_cum, "Test Period Cumulative Returns (rebased to 1)")
-
-    # # ------------------ Single legend outside ------------------
-    # handles, labels = ax1.get_legend_handles_labels()
-    # fig.legend(handles,
-    #            labels,
-    #            loc='lower center',
-    #            bbox_to_anchor=(0.5, -0.10),  # move legend lower
-    #            ncol=len(labels),             # all entries in one row
-    #            fontsize=13)
-
-    # # Save
-    # out = os.path.join(outputs_path, "results", f"cumret-{SIGNAL_NAME}.png")
-    # fig.savefig(out, bbox_inches="tight", dpi=150)
-    # plt.close(fig)
-
-    # print(f"\nSaved: {results_path}")
-    # print("Saved plots to:", os.path.join(outputs_path, "results"))

@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 from typing import List, Tuple, Callable, Iterable
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-import argparse
 
 from data.DatasetLoader import DatasetLoader
 
@@ -261,35 +260,16 @@ def plot_gap(df, metric_train, metric_test, gap_col, title, out_path):
 #                           RUNNER
 # ============================================================
 if __name__ == "__main__":
-
-    args = argparse.ArgumentParser()
-    args.add_argument('--signal', type=str, default='tsmom_moskowitz_prod', help='Signal name')
-    args.add_argument('--dataset', type=str, default='futures', help='Dataset name')
-    args.add_argument('--utility', type=str, default='Sharpe', help='Utility name: Sharpe, Sortino, MaxDD')
-    args.add_argument('--method', type=str, default='RAD', help='Continuous future method')
-    args.add_argument('--n_boot_samples', type=int, default=1000, help='Number of bootstrap samples')
-    args.add_argument('--block_size', type=int, default=10, help='Block size for bootstrap')
-    parsed = args.parse_args()
-
     # ------------------ Paths & IO ------------------
-    SIGNAL_NAME = parsed.signal
-    dataset_name = parsed.dataset
-    utility_name = parsed.utility
-    continuous_future_method = parsed.method
-    N_JOBS = max(1, os.cpu_count() - 1)
-
-    tot = 252
-    PARAM_TRIALS = list(range(5, tot + (tot // 2) + 1, 1))
-    K_BOOT = parsed.n_boot_samples
-    BLOCK_SIZE = parsed.block_size
-    PICKS = ["max", 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
-
+    SIGNAL_NAME = "tsmom_moskowitz_prod"
+    dataset_name = 'futures'
+    continuous_future_method = 'RAD'
     BASE_DIR = os.path.dirname(__file__)
     inputs_path = os.path.join(BASE_DIR, "data", "inputs")
     outputs_path = os.path.join(BASE_DIR, "data", "outputs")
     os.makedirs(os.path.join(outputs_path, "results"), exist_ok=True)
 
-    SIGNAL_NAME = f"{SIGNAL_NAME}_{dataset_name}_{utility_name}"
+    SIGNAL_NAME = f"{SIGNAL_NAME}_{dataset_name}"
 
     ds_builder = DatasetLoader(
             flds={
@@ -323,25 +303,31 @@ if __name__ == "__main__":
     )
     returns = data.pct_change().dropna()
 
+    # Auto workers: leave one CPU free
+    N_JOBS = max(1, os.cpu_count() - 1)
+
+    # Candidate lookbacks
+    tot = 252
+    PARAM_TRIALS = list(range(5, tot + (tot // 2) + 1, 1))
+    K_BOOT = 1000
+    BLOCK_SIZE = 10
+    PICKS = ["max", 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
+
     # Choose in-sample utility for ERM baseline
-    if utility_name == 'Sharpe':
-        UTILITY_FN = util_sharpe_scaled
-    elif utility_name == 'Sortino':
-        UTILITY_FN = util_sortino_scaled
-    elif utility_name == 'MaxDD':
-        UTILITY_FN = util_neg_maxdd_scaled
-    else:
-        raise ValueError(f"Unknown utility_name: {utility_name}")
+    UTILITY_FN = util_sharpe_scaled
+    # UTILITY_FN = util_sortino_scaled
+    # UTILITY_FN = util_neg_maxdd_scaled
+    # UTILITY_FN = lambda bt: util_combo(bt, alpha=1.0, beta=2.0)
 
     # ------------------ Train / Test split ------------------
+    split_points = np.linspace(0.1, 0.9, 100)
     all_results = []
-    for colname in tqdm(returns.columns, desc="Processing assets..."):
-        individual_returns = returns[[colname]].copy().dropna()
+    for split_point in tqdm(split_points, desc="Processing split points..."):
 
-        split_idx = int(len(individual_returns) * 0.80)
-        train_returns = individual_returns.iloc[:split_idx].copy()
-        test_returns  = individual_returns.iloc[split_idx:].copy()
-        full_returns  = individual_returns.copy()
+        split_idx = int(len(returns) * split_point)
+        train_returns = returns.iloc[:split_idx].copy()
+        test_returns  = returns.iloc[split_idx:].copy()
+        full_returns  = returns.copy()
 
         # ------------------ Experiment Config -------------------
         signal_fn = signal_fn_prod  # picklable
@@ -420,65 +406,16 @@ if __name__ == "__main__":
                                             categories=ordered_names,
                                             ordered=True)
         results_df = results_df.sort_values("name").reset_index(drop=True)
-        results_df['asset'] = colname
+        results_df['split_point'] = split_point
         all_results.append(results_df)
     all_results_df = pd.concat(all_results, ignore_index=True)
 
     print("\n=== Parameter selections & metrics ===")
+    # print(results_df.round(3).to_string(index=False))
 
     # Save CSV
-    results_path = os.path.join(outputs_path, "results", f"{SIGNAL_NAME}_individual_bootstrap_selection.csv")
+    results_path = os.path.join(outputs_path, "results", f"{SIGNAL_NAME}_multisplit_bootstrap_selection.csv")
     all_results_df.to_csv(results_path, index=False)
-
-    # function to compute CI for a series
-    def ci_normal(series, alpha=0.05):
-        n = series.count()
-        mean = series.mean()
-        se = series.std(ddof=1) / np.sqrt(n)
-        z = 1.96  # 95%
-        lower = mean - z * se
-        upper = mean + z * se
-        return pd.Series({'mean': mean, 'lower': lower, 'upper': upper})
-
-    filtered_all_results_df = all_results_df.loc[all_results_df['name'] != 'max']
-
-    # apply per group
-    ci_df = filtered_all_results_df.groupby('name')[[f'{utility_name}_train', f'{utility_name}_test', f'Gap_{utility_name}']].apply(
-        lambda df: df.apply(ci_normal)
-    )
-
-    # Slice rows by the 2nd index level
-    ci_mean  = ci_df.xs('mean',  level=1)   # rows: name ; cols: metrics
-    ci_lower = ci_df.xs('lower', level=1)
-    ci_upper = ci_df.xs('upper', level=1)
-
-    metrics = [f'{utility_name}_train', f'{utility_name}_test', f'Gap_{utility_name}']
-    titles  = [f'{utility_name.capitalize()} Train (95% CI)', f'{utility_name.capitalize()} Test (95% CI)', f'Gap {utility_name.capitalize()} (95% CI)']
-
-    fig, axes = plt.subplots(3, 1, figsize=(12, 12), sharex=True)
-
-    for ax, metric, title in zip(axes, metrics, titles):
-        means  = ci_mean[metric]
-        lowers = ci_lower[metric]
-        uppers = ci_upper[metric]
-
-        ax.errorbar(
-            means.index, means.values,
-            yerr=[(means - lowers).values, (uppers - means).values],
-            fmt='o', capsize=5,
-        )
-        ax.set_ylabel(title)
-        # ax.set_title(title)
-        ax.legend()
-
-    plt.xticks(rotation=90)
-    plt.tight_layout()
-    out = os.path.join(outputs_path, "results", f"cis-{SIGNAL_NAME}.png")
-    fig.savefig(out, bbox_inches="tight", dpi=150)
-    plt.close(fig)
-
-    print(f"\nSaved: {results_path}")
-    print("Saved plots to:", os.path.join(outputs_path, "results"))
 
     # # ------------------ Plots ------------------
     # def plot_gap_local(df, metric_train, metric_test, gap_col, title, fname):
