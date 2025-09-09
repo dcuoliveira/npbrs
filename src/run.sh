@@ -1,0 +1,2 @@
+python run_trading_strat_experiment.py --dataset futures --signal tsmom_moskowitz_prod --utility MaxDD --n_boot_samples 1000
+python run_trading_strat_experiment.py --dataset etfs --signal tsmom_moskowitz_prod --utility MaxDD --n_boot_samples 1000

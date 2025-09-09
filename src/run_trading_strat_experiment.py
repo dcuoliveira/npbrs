@@ -1,4 +1,3 @@
-# robust_mom_bootstrap.py
 import os
 import math
 import random
@@ -138,7 +137,7 @@ def util_sortino_scaled(bt: pd.DataFrame) -> float:
     return sortino(bt["portfolio_scaled"])
 
 def util_neg_maxdd_scaled(bt: pd.DataFrame) -> float:
-    return -max_drawdown(bt["portfolio_scaled"])
+    return (-max_drawdown(bt["portfolio_scaled"])) * -1
 
 def util_combo(bt: pd.DataFrame, alpha=1.0, beta=0.0) -> float:
     s = sharpe(bt["portfolio_scaled"])
@@ -265,9 +264,9 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument('--signal', type=str, default='tsmom_moskowitz_prod', help='Signal name')
     args.add_argument('--dataset', type=str, default='futures', help='Dataset name', choices=['futures', 'etfs'])
-    args.add_argument('--utility', type=str, default='Sharpe', help='Utility name: Sharpe, Sortino, MaxDD')
+    args.add_argument('--utility', type=str, default='MaxDD', help='Utility name: Sharpe, Sortino, MaxDD')
     args.add_argument('--method', type=str, default='RAD', help='Continuous future method')
-    args.add_argument('--n_boot_samples', type=int, default=1000, help='Number of bootstrap samples')
+    args.add_argument('--n_boot_samples', type=int, default=10, help='Number of bootstrap samples')
     args.add_argument('--block_size', type=int, default=10, help='Block size for bootstrap')
     parsed = args.parse_args()
 
@@ -282,7 +281,7 @@ if __name__ == "__main__":
     PARAM_TRIALS = list(range(5, tot + (tot // 2) + 1, 1))
     K_BOOT = parsed.n_boot_samples
     BLOCK_SIZE = parsed.block_size
-    PICKS = ["max", 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
+    PICKS = [0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
 
     BASE_DIR = os.path.dirname(__file__)
     inputs_path = os.path.join(BASE_DIR, "data", "inputs")
@@ -388,7 +387,7 @@ if __name__ == "__main__":
         selected_params["ERM_max"] = L_emp
 
         # ---- Desired, fixed display/evaluation order ----
-        DESIRED_ORDER = [f"{p}th" for p in (10,20,30,40,50,60,70,80,90)] + ["max", "ERM_max"]
+        DESIRED_ORDER = [f"{p}th" for p in (10,20,30,40,50,60,70,80,90)] + ["ERM_max"]
         ordered_names = [n for n in DESIRED_ORDER if n in selected_params]
 
         # ------------------ Evaluate train/test IN THIS ORDER ------------------
