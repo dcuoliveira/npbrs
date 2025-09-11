@@ -9,6 +9,7 @@ from typing import List, Tuple, Callable, Iterable
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import argparse
+from typing import Union
 
 from data.DatasetLoader import DatasetLoader
 
@@ -80,8 +81,11 @@ def signal_fn_prod(rets: pd.DataFrame, L: int) -> pd.DataFrame:
 # ============================================================
 #                       BACKTEST + METRICS
 # ============================================================
-def backtest_positions(returns: pd.DataFrame, positions: pd.DataFrame,
-                       vol_target_annual=TARGET_VOL, vol_span=EWMA_SPAN):
+def backtest_positions(returns: pd.DataFrame,
+                       positions: pd.DataFrame,
+                       vol_target_annual=TARGET_VOL,
+                       vol_span=EWMA_SPAN,
+                       vol_scaled_output=True):
     """Next-day execution; returns DataFrame with 'portfolio' and 'portfolio_scaled'."""
     pnl = returns.shift(-1) * positions
     port = pnl.mean(axis=1)  # equal-weight across instruments
@@ -89,7 +93,7 @@ def backtest_positions(returns: pd.DataFrame, positions: pd.DataFrame,
     ann_vol = ann_vol.shift(1).replace(0, np.nan)
     scaled = port * (vol_target_annual / (ann_vol + 1e-12))
     out = pd.DataFrame({"portfolio": port, "portfolio_scaled": scaled}).dropna()
-    return out
+    return out['portfolio_scaled'] if vol_scaled_output else out['portfolio']
 
 def sharpe(series: pd.Series):
     x = series.dropna()
@@ -127,22 +131,14 @@ def metrics(series: pd.Series):
     }
 
 # -------- Example utility functions (pass any into select_param_empirical_parallel) --------
-def util_sharpe_scaled(bt: pd.DataFrame) -> float:
-    return sharpe(bt["portfolio_scaled"])
+def util_sharpe(bt: pd.Series) -> float:
+    return sharpe(bt)
 
-def util_sharpe_unscaled(bt: pd.DataFrame) -> float:
-    return sharpe(bt["portfolio"])
+def util_sortino(bt: pd.Series) -> float:
+    return sortino(bt)
 
-def util_sortino_scaled(bt: pd.DataFrame) -> float:
-    return sortino(bt["portfolio_scaled"])
-
-def util_neg_maxdd_scaled(bt: pd.DataFrame) -> float:
-    return (-max_drawdown(bt["portfolio_scaled"])) * -1
-
-def util_combo(bt: pd.DataFrame, alpha=1.0, beta=0.0) -> float:
-    s = sharpe(bt["portfolio_scaled"])
-    mdd = max_drawdown(bt["portfolio_scaled"])
-    return alpha * s - beta * abs(mdd)
+def util_neg_maxdd(bt: pd.Series) -> float:
+    return max_drawdown(bt)
 
 # ============================================================
 #                PARAMETER SELECTION ROUTINES
@@ -151,20 +147,22 @@ def _eval_param_bootstrap_single(param: int,
                                  paths: List[pd.DataFrame],
                                  signal_fn: Callable[[pd.DataFrame, int], pd.DataFrame]) -> Tuple[int, float, float]:
     """Helper for parallel bootstrap table: compute mean Sharpe/MaxDD over paths for one param."""
-    sh_list, dd_list = [], []
+    sh_list, dd_list, sor_list = [], [], []
     for boot_ret in paths:
         pos = signal_fn(boot_ret, param)
-        bt = backtest_positions(boot_ret, pos)
-        sh_list.append(sharpe(bt["portfolio_scaled"]))
-        dd_list.append(max_drawdown(bt["portfolio_scaled"]))
-    return int(param), float(np.nanmean(sh_list)), float(np.nanmean(dd_list))
+        bt_series = backtest_positions(boot_ret, pos)
+        sh_list.append(sharpe(bt_series))
+        dd_list.append(max_drawdown(bt_series))
+        sor_list.append(sortino(bt_series))
+
+    return int(param), float(np.nanmean(sh_list)), float(np.nanmean(dd_list)), float(np.nanmean(sor_list))
 
 def select_params_via_bootstrap(paths: List[pd.DataFrame], param_trials, signal_fn) -> pd.DataFrame:
     """Sequential version (kept for reference)."""
     rows = []
     for param in tqdm(param_trials, desc="Evaluating parameters"):
-        _, sh, dd = _eval_param_bootstrap_single(param, paths, signal_fn)
-        rows.append({"param": int(param), "sharpe": sh, "maxDD": dd})
+        _, sh, dd, sor = _eval_param_bootstrap_single(param, paths, signal_fn)
+        rows.append({"param": int(param), "sharpe": sh, "MaxDD": dd, "Sortino": sor})
     return pd.DataFrame(rows).sort_values("sharpe", ascending=False).reset_index(drop=True)
 
 def select_params_via_bootstrap_parallel(paths: List[pd.DataFrame],
@@ -178,9 +176,9 @@ def select_params_via_bootstrap_parallel(paths: List[pd.DataFrame],
     with Executor(max_workers=n_jobs) as ex:
         futs = [ex.submit(_eval_param_bootstrap_single, int(p), paths, signal_fn) for p in param_trials]
         for fut in as_completed(futs):
-            param, sh, dd = fut.result()
-            rows.append({"param": param, "sharpe": sh, "maxDD": dd})
-    return pd.DataFrame(rows).sort_values("sharpe", ascending=False).reset_index(drop=True)
+            param, sh, dd, sor = fut.result()
+            rows.append({"param": param, "Sharpe": sh, "MaxDD": dd, "Sortino": sor})
+    return pd.DataFrame(rows).sort_values("Sharpe", ascending=False).reset_index(drop=True)
 
 def _eval_param_single(param: int,
                        train_returns: pd.DataFrame,
@@ -188,8 +186,8 @@ def _eval_param_single(param: int,
                        utility_fn: Callable[[pd.DataFrame], float]) -> Tuple[int, float]:
     """Evaluate one parameter: build positions -> backtest -> utility."""
     pos = signal_fn(train_returns, param)
-    bt  = backtest_positions(train_returns, pos)
-    util = utility_fn(bt)
+    bt_series = backtest_positions(train_returns, pos)
+    util = utility_fn(bt_series)
     if util is None or not np.isfinite(util):
         util = -np.inf
     return int(param), float(util)
@@ -214,11 +212,16 @@ def select_param_empirical_parallel(train_returns: pd.DataFrame,
                 best_param = param
     return best_param, float(best_util)
 
-def pick_percentile_param(df: pd.DataFrame, q):
+def pick_percentile_param(df: pd.DataFrame, q: Union[str, float], metric: str) -> int:
     """
     q can be 'max' or a percentile in (0,1].
     'max' = best Sharpe. Otherwise, pick parameter at the given upper-tail percentile.
     """
+
+    # # sort descending by metric
+    # df = df.sort_values(metric, ascending=False).reset_index(drop=True)
+
+    # pick index by quantile
     if q == "max":
         return int(df.iloc[0]['param'])
     idx = int(np.clip(np.ceil((1.0 - q) * (len(df) - 1)), 0, len(df) - 1))
@@ -336,11 +339,11 @@ if __name__ == "__main__":
 
     # Choose in-sample utility for ERM baseline
     if utility_name == 'Sharpe':
-        UTILITY_FN = util_sharpe_scaled
+        UTILITY_FN = util_sharpe
     elif utility_name == 'Sortino':
-        UTILITY_FN = util_sortino_scaled
+        UTILITY_FN = util_sortino
     elif utility_name == 'MaxDD':
-        UTILITY_FN = util_neg_maxdd_scaled
+        UTILITY_FN = util_neg_maxdd
     else:
         raise ValueError(f"Unknown utility_name: {utility_name}")
 
@@ -373,7 +376,7 @@ if __name__ == "__main__":
         selected_params = {}
         for q in PICKS:
             name = str(q) if isinstance(q, str) else f"{int(q*100)}th"
-            selected_params[name] = pick_percentile_param(boot_df, q)
+            selected_params[name] = pick_percentile_param(boot_df, q, utility_name)
 
         # ------------------ Baseline ERM (parallel) ------------------
         L_emp, _ = select_param_empirical_parallel(
@@ -399,13 +402,13 @@ if __name__ == "__main__":
             L = selected_params[name]
             # Train
             pos_tr = signal_fn(train_returns, L)
-            bt_tr = backtest_positions(train_returns, pos_tr)
+            bt_tr_series = backtest_positions(train_returns, pos_tr)
             # Test (build positions on full series, slice to test)
-            bt_te = apply_param_to_test(full_returns, train_len, L, signal_fn)
+            bt_te_series = apply_param_to_test(full_returns, train_len, L, signal_fn)
 
             # Metrics on scaled series
-            m_tr = metrics(bt_tr["portfolio_scaled"])
-            m_te = metrics(bt_te["portfolio_scaled"])
+            m_tr = metrics(bt_tr_series)
+            m_te = metrics(bt_te_series)
 
             records.append({
                 "name": name, "param": L,
@@ -421,8 +424,8 @@ if __name__ == "__main__":
 
             # Continuous full-sample cum-returns (scaled) for plotting
             full_pos = signal_fn(full_returns, L)
-            full_bt  = backtest_positions(full_returns, full_pos)
-            cum = (1 + full_bt["portfolio_scaled"]).cumprod()
+            full_bt_series  = backtest_positions(full_returns, full_pos)
+            cum = (1 + full_bt_series).cumprod()
             cumret_panels[f"{name}_{L}"] = cum
 
         # Build DataFrame and lock the categorical order for plotting/printing
@@ -446,20 +449,24 @@ if __name__ == "__main__":
         n = series.count()
         mean = series.mean()
         se = series.std(ddof=1) / np.sqrt(n)
-        z = 1.96  # 95%
+        z = 1.96 if alpha == 0.05 else None
         lower = mean - z * se
         upper = mean + z * se
         return pd.Series({'mean': mean, 'lower': lower, 'upper': upper})
 
     filtered_all_results_df = all_results_df.loc[all_results_df['name'] != 'max']
 
+    # input(filtered_all_results_df)
+
     # apply per group
     ci_df = filtered_all_results_df.groupby('name')[[f'{utility_name}_train', f'{utility_name}_test', f'Gap_{utility_name}']].apply(
         lambda df: df.apply(ci_normal)
     )
 
+    # input(ci_df)
+
     # Slice rows by the 2nd index level
-    ci_mean  = ci_df.xs('mean',  level=1)   # rows: name ; cols: metrics
+    ci_mean  = ci_df.xs('mean',  level=1)
     ci_lower = ci_df.xs('lower', level=1)
     ci_upper = ci_df.xs('upper', level=1)
 
@@ -474,7 +481,8 @@ if __name__ == "__main__":
         uppers = ci_upper[metric]
 
         ax.errorbar(
-            means.index, means.values,
+            means.index,
+            means.values,
             yerr=[(means - lowers).values, (uppers - means).values],
             fmt='o', capsize=5,
         )
