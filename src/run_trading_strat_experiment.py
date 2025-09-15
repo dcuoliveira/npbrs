@@ -140,6 +140,16 @@ def util_sortino(bt: pd.Series) -> float:
 def util_neg_maxdd(bt: pd.Series) -> float:
     return max_drawdown(bt)
 
+def map_util_fn_code_to_name(code: str) -> str:
+    if code == 'util_neg_maxdd':
+        return 'MaxDD'
+    elif code == 'util_sortino':
+        return 'Sortino'
+    elif code == 'util_sharpe':
+        return 'Sharpe'
+    else:
+        raise ValueError(f"Unknown utility function code: {code}")
+
 # ============================================================
 #                PARAMETER SELECTION ROUTINES
 # ============================================================
@@ -162,14 +172,14 @@ def select_params_via_bootstrap(paths: List[pd.DataFrame], param_trials, signal_
     rows = []
     for param in tqdm(param_trials, desc="Evaluating parameters"):
         _, sh, dd, sor = _eval_param_bootstrap_single(param, paths, signal_fn)
-        rows.append({"param": int(param), "sharpe": sh, "MaxDD": dd, "Sortino": sor})
-    return pd.DataFrame(rows).sort_values("sharpe", ascending=False).reset_index(drop=True)
+        rows.append({"param": int(param), "Sharpe": sh, "MaxDD": dd, "Sortino": sor})
+    return pd.DataFrame(rows).sort_values("Sharpe", ascending=False).reset_index(drop=True)
 
-def select_params_via_bootstrap_parallel(paths: List[pd.DataFrame],
-                                         param_trials,
-                                         signal_fn,
-                                         n_jobs: int = None,
-                                         backend: str = "process") -> pd.DataFrame:
+def select_params_via_robust_bootstrap_parallel(paths: List[pd.DataFrame],
+                                                param_trials,
+                                                signal_fn,
+                                                n_jobs: int = None,
+                                                backend: str = "process") -> pd.DataFrame:
     """Parallel bootstrap table over parameters."""
     Executor = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
     rows = []
@@ -178,6 +188,46 @@ def select_params_via_bootstrap_parallel(paths: List[pd.DataFrame],
         for fut in as_completed(futs):
             param, sh, dd, sor = fut.result()
             rows.append({"param": param, "Sharpe": sh, "MaxDD": dd, "Sortino": sor})
+    return pd.DataFrame(rows).sort_values("Sharpe", ascending=False).reset_index(drop=True)
+
+def _eval_param_classical_bootstrap_single(boot_ret: pd.DataFrame,
+                                           params: int,
+                                           signal_fn: Callable[[pd.DataFrame, int], pd.DataFrame],
+                                           utility_fn: str) -> Tuple[int, float, float]:
+    """Helper for parallel bootstrap table: compute mean Sharpe/MaxDD over paths for one param."""
+    sh_list, dd_list, sor_list = [], [], []
+    for param in params:
+        pos = signal_fn(boot_ret, param)
+        bt_series = backtest_positions(boot_ret, pos)
+        sh_list.append(sharpe(bt_series))
+        dd_list.append(max_drawdown(bt_series))
+        sor_list.append(sortino(bt_series))
+    output_df = pd.DataFrame({"param": params, "Sharpe": sh_list, "MaxDD": dd_list, "Sortino": sor_list})
+    output_df = output_df.sort_values(map_util_fn_code_to_name(utility_fn.__name__), ascending=False).reset_index(drop=True)
+
+    param = output_df.iloc[0]['param']
+    sr = output_df.iloc[0]['Sharpe']
+    md = output_df.iloc[0]['MaxDD']
+    so = output_df.iloc[0]['Sortino']
+
+    return int(param), float(sr), float(md), float(so)
+
+def select_params_via_classical_bootstrap_parallel(paths: List[pd.DataFrame],
+                                                   param_trials,
+                                                   signal_fn,
+                                                   utility_fn,
+                                                   n_jobs: int = None,
+                                                   backend: str = "process") -> pd.DataFrame:
+    """Parallel bootstrap table over parameters."""
+    Executor = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
+    rows = []
+    with Executor(max_workers=n_jobs) as ex:
+        futs = [ex.submit(_eval_param_classical_bootstrap_single, path, param_trials, signal_fn, utility_fn) for path in paths]
+        boot_idx = 0
+        for fut in as_completed(futs):
+            param, sh, dd, sor = fut.result()
+            rows.append({"boot_idx": boot_idx, "param": param, "Sharpe": sh, "MaxDD": dd, "Sortino": sor})
+            boot_idx += 1
     return pd.DataFrame(rows).sort_values("Sharpe", ascending=False).reset_index(drop=True)
 
 def _eval_param_single(param: int,
@@ -267,7 +317,7 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument('--signal', type=str, default='tsmom_moskowitz_prod', help='Signal name')
     args.add_argument('--dataset', type=str, default='futures', help='Dataset name', choices=['futures', 'etfs'])
-    args.add_argument('--utility', type=str, default='MaxDD', help='Utility name: Sharpe, Sortino, MaxDD')
+    args.add_argument('--utility', type=str, default='Sharpe', help='Utility name: Sharpe, Sortino, MaxDD')
     args.add_argument('--method', type=str, default='RAD', help='Continuous future method')
     args.add_argument('--n_boot_samples', type=int, default=10, help='Number of bootstrap samples')
     args.add_argument('--block_size', type=int, default=10, help='Block size for bootstrap')
@@ -363,20 +413,30 @@ if __name__ == "__main__":
         # Bootstrap once (built on train only)
         bootstrap_paths = build_bootstrap_paths_df(train_returns, BLOCK_SIZE, K_BOOT, seed_base=RNG_SEED)
 
-        # ------------------ Bootstrap selection table (parallel) ------------------
-        boot_df = select_params_via_bootstrap_parallel(
+        # ------------------ Robust Bootstrap selection table (parallel) ------------------
+        boot_df = select_params_via_robust_bootstrap_parallel(
             bootstrap_paths,
             PARAM_TRIALS,
             signal_fn=signal_fn,
             n_jobs=N_JOBS,
             backend="process"
         )
-
-        # Pick parameters by ranked percentiles of bootstrap Sharpe
+        # Pick parameters by ranked percentiles of robust bootstrap utility
         selected_params = {}
         for q in PICKS:
             name = str(q) if isinstance(q, str) else f"{int(q*100)}th"
             selected_params[name] = pick_percentile_param(boot_df, q, utility_name)
+
+        # ------------------ Classical Bootstrap selection table (parallel) ------------------
+        classical_boot_df = select_params_via_classical_bootstrap_parallel(
+            bootstrap_paths,
+            PARAM_TRIALS,
+            signal_fn=signal_fn,
+            utility_fn=UTILITY_FN,
+            n_jobs=N_JOBS,
+            backend="process"
+        )
+        selected_params['ERM_Boot'] = int(classical_boot_df.sort_values(utility_name, ascending=False).reset_index(drop=True).iloc[0]['param'])
 
         # ------------------ Baseline ERM (parallel) ------------------
         L_emp, _ = select_param_empirical_parallel(
@@ -390,7 +450,7 @@ if __name__ == "__main__":
         selected_params["ERM_max"] = L_emp
 
         # ---- Desired, fixed display/evaluation order ----
-        DESIRED_ORDER = [f"{p}th" for p in (10,20,30,40,50,60,70,80,90)] + ["ERM_max"]
+        DESIRED_ORDER = [f"{p}th" for p in (10,20,30,40,50,60,70,80,90)] + ["ERM_Boot", "ERM_max"]
         ordered_names = [n for n in DESIRED_ORDER if n in selected_params]
 
         # ------------------ Evaluate train/test IN THIS ORDER ------------------
