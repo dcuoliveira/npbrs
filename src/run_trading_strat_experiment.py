@@ -178,6 +178,7 @@ def select_params_via_bootstrap(paths: List[pd.DataFrame], param_trials, signal_
 def select_params_via_robust_bootstrap_parallel(paths: List[pd.DataFrame],
                                                 param_trials,
                                                 signal_fn,
+                                                utility_fn,
                                                 n_jobs: int = None,
                                                 backend: str = "process") -> pd.DataFrame:
     """Parallel bootstrap table over parameters."""
@@ -188,7 +189,7 @@ def select_params_via_robust_bootstrap_parallel(paths: List[pd.DataFrame],
         for fut in as_completed(futs):
             param, sh, dd, sor = fut.result()
             rows.append({"param": param, "Sharpe": sh, "MaxDD": dd, "Sortino": sor})
-    return pd.DataFrame(rows).sort_values("Sharpe", ascending=False).reset_index(drop=True)
+    return pd.DataFrame(rows).sort_values(map_util_fn_code_to_name(utility_fn.__name__), ascending=False).reset_index(drop=True)
 
 def _eval_param_classical_bootstrap_single(boot_ret: pd.DataFrame,
                                            params: int,
@@ -228,7 +229,7 @@ def select_params_via_classical_bootstrap_parallel(paths: List[pd.DataFrame],
             param, sh, dd, sor = fut.result()
             rows.append({"boot_idx": boot_idx, "param": param, "Sharpe": sh, "MaxDD": dd, "Sortino": sor})
             boot_idx += 1
-    return pd.DataFrame(rows).sort_values("Sharpe", ascending=False).reset_index(drop=True)
+    return pd.DataFrame(rows).sort_values(map_util_fn_code_to_name(utility_fn.__name__), ascending=False).reset_index(drop=True)
 
 def _eval_param_single(param: int,
                        train_returns: pd.DataFrame,
@@ -418,6 +419,7 @@ if __name__ == "__main__":
             bootstrap_paths,
             PARAM_TRIALS,
             signal_fn=signal_fn,
+            utility_fn=UTILITY_FN,
             n_jobs=N_JOBS,
             backend="process"
         )
@@ -436,7 +438,7 @@ if __name__ == "__main__":
             n_jobs=N_JOBS,
             backend="process"
         )
-        selected_params['ERM_Boot'] = int(classical_boot_df.sort_values(utility_name, ascending=False).reset_index(drop=True).iloc[0]['param'])
+        selected_params['ERM_Boot'] = int(classical_boot_df.iloc[0]['param'])
 
         # ------------------ Baseline ERM (parallel) ------------------
         L_emp, _ = select_param_empirical_parallel(
